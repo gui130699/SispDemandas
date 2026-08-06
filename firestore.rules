@@ -1,0 +1,15 @@
+rules_version = '2'; service cloud.firestore { match /databases/{database}/documents {
+ function signedIn(){return request.auth != null} function user(){return get(/databases/$(database)/documents/users/$(request.auth.uid)).data} function active(){return signedIn() && user().active == true} function admin(){return active() && user().role == 'admin'} function consultant(){return active() && user().role == 'consultant'} function requester(){return active() && user().role == 'requester'} function sameCompany(id){return requester() && user().companyId == id}
+ match /users/{uid}{allow read: if active() && (admin() || uid==request.auth.uid); allow create,update: if admin(); allow delete: if false;}
+ match /companies/{id}{allow read: if active(); allow create,update: if admin(); allow delete: if false;}
+ match /uniqueCompanyKeys/{id}{allow read,write: if admin();}
+ match /levels/{id}{allow read: if active(); allow write: if admin();}
+ match /counters/{id}{allow read: if active(); allow write: if active();}
+ match /demands/{id}{allow read: if admin() || (consultant() && (resource.data.consultantId==request.auth.uid || resource.data.consultantId==null)) || sameCompany(resource.data.companyId); allow create: if active() && ((requester() && request.resource.data.companyId==user().companyId) || admin() || consultant()) && request.resource.data.status=='new'; allow update: if admin() || (consultant() && (resource.data.consultantId==request.auth.uid || resource.data.consultantId==null)) || (sameCompany(resource.data.companyId) && request.resource.data.companyId==resource.data.companyId && request.resource.data.consultantId==resource.data.consultantId && request.resource.data.status==resource.data.status); allow delete: if false;
+  match /publicNotes/{note}{allow read: if admin() || consultant() || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if active(); allow update,delete: if false;}
+  match /internalNotes/{note}{allow read,create: if admin() || consultant(); allow update,delete: if false;}
+  match /history/{event}{allow read: if admin() || consultant() || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if admin() || consultant(); allow update,delete: if false;}
+ }
+ match /auditLogs/{id}{allow read: if admin(); allow create: if active(); allow update,delete: if false;}
+ match /settings/{id}{allow read: if active(); allow write: if admin();}
+}}

@@ -1,0 +1,2 @@
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'; import { db } from '../lib/firebase'; import type { UserProfile } from '../types/models'
+export const audit=(user:UserProfile, action:string, entityType:string, entityId:string, companyId?:string|null,before?:unknown,after?:unknown)=>addDoc(collection(db,'auditLogs'),{action,entityType,entityId,companyId:companyId??null,before:before??null,after:after??null,userId:user.uid,userName:user.name,userRole:user.role,createdAt:serverTimestamp()})
