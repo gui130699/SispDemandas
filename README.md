@@ -1,4 +1,4 @@
-# SISP Demandas
+# SISPDEMANDAS
 
 PWA empresarial para registrar, organizar e acompanhar demandas por empresa. Perfis: administrador, consultor e solicitante; cada empresa fica isolada por regras do Firebase.
 
