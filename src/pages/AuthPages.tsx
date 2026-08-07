@@ -59,10 +59,14 @@ export function LoginPage() {
             {saving ? "Entrando…" : "Entrar"}
           </button>
         </form>
-        <Link to="/recuperar-senha">Recuperar senha</Link>
-        <Link className="secondary-action" to="/cadastro">
-          Novo cadastro
-        </Link>
+        <div className="auth-actions">
+          <Link className="auth-action" to="/recuperar-senha">
+            Recuperar senha
+          </Link>
+          <Link className="auth-action" to="/cadastro">
+            Novo cadastro
+          </Link>
+        </div>
       </div>
     </section>
   );

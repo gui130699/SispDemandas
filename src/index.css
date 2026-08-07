@@ -362,6 +362,28 @@ dd {
   gap: 16px;
   margin: 24px 0;
 }
+.auth-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 6px;
+}
+.auth-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--blue);
+  font-weight: 650;
+  text-align: center;
+  text-decoration: none;
+}
+.auth-action:hover {
+  background: var(--surface-alt);
+}
 .logo {
   justify-content: center;
   color: var(--text);
