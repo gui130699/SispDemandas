@@ -1,15 +1,44 @@
-rules_version = '2'; service cloud.firestore { match /databases/{database}/documents {
- function signedIn(){return request.auth != null} function user(){return get(/databases/$(database)/documents/users/$(request.auth.uid)).data} function active(){return signedIn() && user().active == true} function admin(){return active() && user().role == 'admin'} function consultant(){return active() && user().role == 'consultant'} function requester(){return active() && user().role == 'requester'} function sameCompany(id){return requester() && user().companyId == id}
- match /users/{uid}{allow read: if active() && (admin() || uid==request.auth.uid); allow create: if admin() || (signedIn() && uid==request.auth.uid && request.resource.data.uid==request.auth.uid && request.resource.data.name is string && request.resource.data.email is string && request.resource.data.emailNormalized is string && request.resource.data.role=='requester' && request.resource.data.active==false && request.resource.data.companyId is string && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId)) && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active==true && request.resource.data.companyName==get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.legalName); allow update: if admin(); allow delete: if false;}
- match /companies/{id}{allow read: if active() || resource.data.active==true; allow create,update: if admin(); allow delete: if false;}
- match /uniqueCompanyKeys/{id}{allow read,write: if admin();}
- match /levels/{id}{allow read: if active(); allow write: if admin();}
- match /counters/{id}{allow read: if active(); allow write: if active();}
- match /demands/{id}{allow read: if admin() || (consultant() && (resource.data.consultantId==request.auth.uid || resource.data.consultantId==null)) || sameCompany(resource.data.companyId); allow create: if active() && ((requester() && request.resource.data.companyId==user().companyId) || admin() || consultant()) && request.resource.data.status=='new'; allow update: if admin() || (consultant() && (resource.data.consultantId==request.auth.uid || resource.data.consultantId==null)) || (sameCompany(resource.data.companyId) && request.resource.data.companyId==resource.data.companyId && request.resource.data.consultantId==resource.data.consultantId && request.resource.data.status==resource.data.status); allow delete: if false;
-  match /publicNotes/{note}{allow read: if admin() || consultant() || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if active(); allow update,delete: if false;}
-  match /internalNotes/{note}{allow read,create: if admin() || consultant(); allow update,delete: if false;}
-  match /history/{event}{allow read: if admin() || consultant() || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if admin() || consultant(); allow update,delete: if false;}
- }
- match /auditLogs/{id}{allow read: if admin(); allow create: if active(); allow update,delete: if false;}
- match /settings/{id}{allow read: if active(); allow write: if admin();}
-}}
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function active() { return signedIn() && profile().active == true; }
+    function admin() { return active() && profile().role == 'admin'; }
+    function consultant() { return active() && profile().role == 'consultant'; }
+    function requester() { return active() && profile().role == 'requester'; }
+    function sameCompany(companyId) { return requester() && profile().companyId == companyId; }
+    function consultantCompany(companyId) { return consultant() && companyId in profile().companyIds; }
+    function assignedOrAvailable(demand) { return consultantCompany(demand.companyId) && (demand.consultantId == request.auth.uid || demand.consultantId == null); }
+    function ownerCandidate() { return signedIn() && exists(/databases/$(database)/documents/bootstrapConfig/owner) && get(/databases/$(database)/documents/bootstrapConfig/owner).data.initialized == false && get(/databases/$(database)/documents/bootstrapConfig/owner).data.emailNormalized == request.auth.token.email; }
+    function validPendingRegistration() {
+      return signedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.active == false && request.resource.data.registrationStatus == 'pending' && request.resource.data.name is string && request.resource.data.emailNormalized == request.auth.token.email && ((request.resource.data.role == 'requester' && request.resource.data.companyId is string && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId)) && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active == true) || (request.resource.data.role == 'consultant' && request.resource.data.companyIds is list));
+    }
+
+    match /publicConfig/bootstrap { allow get: if true; allow list: if false; allow create: if false; allow update: if admin() || ownerCandidate(); allow delete: if false; }
+    match /bootstrapConfig/owner { allow get: if admin() || ownerCandidate(); allow create: if false; allow update: if admin() || ownerCandidate(); allow delete: if false; }
+
+    match /users/{uid} {
+      allow read: if active() && (admin() || uid == request.auth.uid);
+      allow create: if admin() || validPendingRegistration() || (ownerCandidate() && uid == request.auth.uid && request.resource.data.role == 'admin' && request.resource.data.active == true && request.resource.data.registrationStatus == 'approved' && getAfter(/databases/$(database)/documents/bootstrapConfig/owner).data.initialized == true && getAfter(/databases/$(database)/documents/bootstrapConfig/owner).data.adminUid == request.auth.uid && getAfter(/databases/$(database)/documents/publicConfig/bootstrap).data.initialized == true);
+      allow update: if admin(); allow delete: if false;
+    }
+    match /companies/{id} { allow get, list: if active() || resource.data.active == true; allow create, update: if admin(); allow delete: if false; }
+    match /uniqueCompanyKeys/{id} { allow read, write: if admin(); }
+    match /levels/{id} { allow read: if active(); allow write: if admin(); }
+    match /demandStatuses/{id} { allow read: if active(); allow write: if admin(); }
+    match /counters/{id} { allow read: if active(); allow write: if active(); }
+    match /demands/{id} {
+      allow read: if admin() || assignedOrAvailable(resource.data) || sameCompany(resource.data.companyId);
+      allow create: if active() && ((requester() && request.resource.data.companyId == profile().companyId) || admin() || consultantCompany(request.resource.data.companyId)) && request.resource.data.status == 'analysis' && request.resource.data.deletedAt == null;
+      allow update: if admin() || assignedOrAvailable(resource.data) || (sameCompany(resource.data.companyId) && request.resource.data.companyId == resource.data.companyId && request.resource.data.consultantId == resource.data.consultantId && request.resource.data.statusId == resource.data.statusId);
+      allow delete: if false;
+      match /publicNotes/{note} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if active(); allow update, delete: if false; }
+      match /internalNotes/{note} { allow read, create: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false; }
+      match /history/{event} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false; }
+    }
+    match /notifications/{id} { allow read: if active() && (admin() || resource.data.userId == request.auth.uid); allow create: if admin(); allow update: if active() && resource.data.userId == request.auth.uid; allow delete: if false; }
+    match /auditLogs/{id} { allow read: if admin(); allow create: if active(); allow update, delete: if false; }
+    match /settings/{id} { allow read: if active(); allow write: if admin(); }
+  }
+}

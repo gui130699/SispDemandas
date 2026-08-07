@@ -4,7 +4,7 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { auth, db, secondaryAuth } from "../lib/firebase";
 import type { Role, UserProfile } from "../types/models";
 import { audit } from "./audit";
@@ -15,6 +15,7 @@ export interface CreateUserInput {
   role: Role;
   companyId: string | null;
   companyName: string | null;
+  companyIds?: string[];
 }
 
 export async function createManagedUser(
@@ -43,7 +44,9 @@ export async function createManagedUser(
       role: input.role,
       companyId: input.companyId,
       companyName: input.companyName,
+      companyIds: input.role === "consultant" ? input.companyIds ?? [] : [],
       active: true,
+      registrationStatus: "approved",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       createdBy: admin.uid,
@@ -77,6 +80,31 @@ export async function createManagedUser(
 
   await sendPasswordResetEmail(auth, email);
   return createdUser.uid;
+}
+
+export async function approveRegistration(user: UserProfile, admin: UserProfile, companyIds?: string[], defaultSector?: string) {
+  const cleanCompanyIds = [...new Set(companyIds ?? user.requestedCompanyIds ?? user.companyIds ?? [])];
+  if (user.role === "consultant" && !cleanCompanyIds.length) throw new Error("Selecione ao menos uma empresa para o consultor.");
+  if (user.role === "requester" && !user.companyId) throw new Error("Cliente sem empresa vinculada.");
+  const batch = writeBatch(db);
+  batch.update(doc(db, "users", user.uid), {
+    active: true, registrationStatus: "approved", rejectionReason: null,
+    companyIds: user.role === "consultant" ? cleanCompanyIds : [],
+    defaultSector: defaultSector ?? user.defaultSector ?? "", updatedAt: serverTimestamp(), updatedBy: admin.uid,
+  });
+  batch.set(doc(db, "notifications", `${user.uid}_${Date.now()}`), { userId: user.uid, title: "Cadastro aprovado", message: "Seu acesso ao SISPDEMANDAS foi liberado.", read: false, createdAt: serverTimestamp() });
+  await batch.commit();
+  await audit(admin, "approve", "user", user.uid, user.companyId, { registrationStatus: "pending" }, { registrationStatus: "approved" });
+}
+
+export async function rejectRegistration(user: UserProfile, admin: UserProfile, reason: string) {
+  await updateDoc(doc(db, "users", user.uid), { active: false, registrationStatus: "rejected", rejectionReason: reason.trim() || "Cadastro não aprovado.", updatedAt: serverTimestamp(), updatedBy: admin.uid });
+  await audit(admin, "reject", "user", user.uid, user.companyId, undefined, { reason });
+}
+
+export async function updateConsultantAccess(user: UserProfile, admin: UserProfile, companyIds: string[], permissions: NonNullable<UserProfile["permissions"]>) {
+  await updateDoc(doc(db, "users", user.uid), { companyIds: [...new Set(companyIds)], permissions, updatedAt: serverTimestamp(), updatedBy: admin.uid });
+  await audit(admin, "update_access", "user", user.uid, undefined, undefined, { companyIds, permissions });
 }
 
 export async function setUserActive(

@@ -4,6 +4,8 @@ import { AutoRefresh } from "./components/AutoRefresh";
 import { AppLayout } from "./layouts/AppLayout";
 import { LoginPage, ForgotPasswordPage, BlockedPage } from "./pages/AuthPages";
 import { PublicRegistrationPage } from "./pages/PublicRegistrationPage";
+import { ApprovalsPage } from "./pages/ApprovalsPage";
+import { StatusesPage } from "./pages/StatusesPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import {
   DemandsPage,
@@ -39,6 +41,8 @@ export default function App() {
             <Route path="demandas/:id" element={<DemandDetailPage />} />
             <Route path="empresas" element={<CompaniesPage />} />
             <Route path="usuarios" element={<UsersPage />} />
+            <Route path="aprovacoes" element={<ApprovalsPage />} />
+            <Route path="status" element={<StatusesPage />} />
             <Route path="niveis" element={<LevelsPage />} />
             <Route path="auditoria" element={<AuditPage />} />
           </Route>

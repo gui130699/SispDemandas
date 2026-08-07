@@ -1,0 +1,36 @@
+STATUS ATUAL — SISPDEMANDAS
+Atualização: evolução profissional do projeto existente (sem recriação, troca de Firebase ou exclusão de dados).
+
+IMPLEMENTADO
+- Cadastro público em #/cadastro com escolha de Cliente e Consultor.
+- Clientes e consultores criados como pending/inactive; aprovação ocorre em #/aprovacoes.
+- Bootstrap único e seguro do primeiro administrador por e-mail proprietário configurado manualmente.
+- Perfis de consultor preparados para múltiplas empresas (companyIds/requestedCompanyIds) e permissões.
+- Catálogo dinâmico demandStatuses em #/status, com cores, ordem, descrição, inativação e compatibilidade com status antigos.
+- Demandas novas iniciam em Em análise, registram setor e usam campos de status compatíveis.
+- Alteração de status, conclusão com solução obrigatória e exclusão lógica no detalhe de demanda.
+- Firestore Rules, Storage Rules e índices atualizados para isolamento de empresa de Cliente/Consultor.
+- Aprovações, status, cadastro e navegação administrativa adicionados.
+
+COLEÇÕES/NOVOS CAMPOS
+- bootstrapConfig/owner (privada): emailNormalized, initialized, adminUid, initializedAt.
+- publicConfig/bootstrap: initialized, initializedAt.
+- demandStatuses: name, description, color, order, active, isFinal, legacyKeys.
+- notifications: userId, title, message, read, createdAt.
+- users: registrationStatus, companyIds, requestedCompanyIds, permissions, defaultSector, phone, rejectionReason.
+- demands: requesterSector, statusId, statusName, statusColor, statusUpdatedAt, resolution, completedBy, deletedAt, deletedBy, deleteReason, schemaVersion.
+
+CONFIGURAÇÃO MANUAL RESTANTE
+1. Criar bootstrapConfig/owner e publicConfig/bootstrap conforme README antes do primeiro administrador.
+2. Publicar regras, Storage Rules e índices com Firebase CLI.
+3. Entrar como administrador e inicializar o catálogo de status em #/status.
+4. Conferir se o domínio GitHub Pages está autorizado no Firebase Authentication.
+
+VALIDAÇÃO LOCAL
+- npm run lint
+- npm run test:run
+- npm run test:rules
+- npm run build
+
+OBSERVAÇÃO
+O projeto preserva documentos existentes e mantém o campo legado demands.status. Não houve migração destrutiva.

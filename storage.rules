@@ -1,1 +1,9 @@
-rules_version = '2'; service firebase.storage { match /b/{bucket}/o { function signedIn(){return request.auth!=null} function active(){return signedIn() && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.active==true} function allowed(){return request.resource.size < 10*1024*1024 && request.resource.contentType.matches('application/(pdf|vnd.openxmlformats-officedocument.*|vnd.ms-excel|json|csv|plain)|image/(png|jpeg|webp)|text/(plain|csv)')} match /demands/{demandId}/{fileName}{allow read: if active(); allow create: if active() && allowed() && fileName.matches('[A-Za-z0-9._-]+'); allow update,delete: if false;}}}
+rules_version = '2';
+service firebase.storage { match /b/{bucket}/o {
+  function signedIn(){ return request.auth != null; }
+  function profile(){ return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; }
+  function active(){ return signedIn() && profile().active == true; }
+  function canAccessDemand(demandId){ let demand = firestore.get(/databases/(default)/documents/demands/$(demandId)).data; return profile().role == 'admin' || (profile().role == 'requester' && demand.companyId == profile().companyId) || (profile().role == 'consultant' && demand.companyId in profile().companyIds); }
+  function allowed(){ return request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('application/(pdf|vnd.openxmlformats-officedocument.*|vnd.ms-excel|json|csv|plain)|image/(png|jpeg|webp)|text/(plain|csv)'); }
+  match /demands/{demandId}/{fileName}{ allow read: if active() && canAccessDemand(demandId); allow create: if active() && canAccessDemand(demandId) && allowed() && fileName.matches('[A-Za-z0-9._-]+'); allow update,delete: if false; }
+}}

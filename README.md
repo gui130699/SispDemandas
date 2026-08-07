@@ -1,43 +1,52 @@
 # SISPDEMANDAS
 
-PWA empresarial para registrar, organizar e acompanhar demandas por empresa. Perfis: administrador, consultor e solicitante; cada empresa fica isolada por regras do Firebase.
+Aplicação PWA para gestão de demandas por empresa, publicada em GitHub Pages e integrada ao Firebase `sispdemandas`.
 
-## Executar
+## Perfis e cadastro
+
+- **Cliente**: escolhe uma empresa ativa, informa setor/telefone opcionais e fica pendente até a aprovação.
+- **Consultor**: solicita uma ou mais empresas e fica pendente até que um administrador defina os vínculos.
+- **Administrador**: só pode ser criado uma única vez pelo bootstrap seguro; os administradores seguintes são criados internamente.
+
+### Bootstrap seguro do primeiro administrador
+
+Antes de exibir o cadastro inicial, crie manualmente no Firestore os documentos abaixo (substitua o e-mail pelo e-mail do proprietário, em minúsculas):
+
+`bootstrapConfig/owner`
+
+```json
+{"emailNormalized":"proprietario@exemplo.com","initialized":false}
+```
+
+`publicConfig/bootstrap`
+
+```json
+{"initialized":false}
+```
+
+Depois, acesse `#/cadastro` e conclua o perfil **Configurar administrador** usando exatamente esse e-mail. As regras gravam o usuário administrador e marcam os dois documentos como inicializados numa única transação. Nunca libere escrita pública nesses documentos.
+
+## Dados e migração compatível
+
+Demandas novas usam `statusId`, `statusName` e `statusColor`, sem remover o campo legado `status`. Os documentos antigos seguem visíveis: a interface os relaciona ao catálogo por `legacyKeys`. Após entrar como administrador, abra **Status** e clique em **Inicializar catálogo padrão**.
+
+Os novos campos de usuário são `registrationStatus`, `companyIds`, `requestedCompanyIds`, `permissions`, `defaultSector`, `phone` e `rejectionReason`. Todos são opcionais para preservar documentos existentes.
+
+## Executar e validar
 
 ```bash
 npm install
-npm run dev
 npm run lint
 npm run test:run
+npm run test:rules
 npm run build
 ```
 
-Outros scripts: `npm run preview` e `npm run test:rules` (requer Firebase Emulator em execução).
+Publique regras/índices após revisar o ambiente:
 
-## Recursos
-
-- Login, recuperação de senha, sessão e bloqueio de usuário inativo.
-- Empresas com chave única transacional por CNPJ/razão social.
-- Demandas sequenciais `DEM-ANO-000001`, filtros, status, prioridade, SLA e dias calculados.
-- Notas públicas/internas, histórico, auditoria, dashboard, temas e PWA atualizável.
-- Firestore/Storage Rules, índices e GitHub Pages configurados.
-
-## Firebase — configuração manual obrigatória
-
-1. Ative Email/Password no Authentication, Firestore e Storage.
-2. Autorize `gui130699.github.io` em Authentication → Settings → Authorized domains.
-3. Crie o primeiro administrador no Authentication e copie seu UID.
-4. Crie `users/{UID}` no Firestore:
-
-```json
-{"name":"Administrador","email":"admin@exemplo.com","emailNormalized":"admin@exemplo.com","role":"admin","companyId":null,"active":true,"createdAt":"timestamp","updatedAt":"timestamp"}
+```bash
+firebase use sispdemandas
+firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
-5. Publique: `firebase login`, `firebase use sispdemandas`, `firebase deploy --only firestore:rules,firestore:indexes,storage`.
-6. Cadastre inicialmente os níveis N1–N4 em `levels`, com `name`, `days`, `order`, `active` e `color`.
-
-Não armazene senhas ou credenciais administrativas no Firestore/repositório. Para usar a marca real, copie o arquivo original para `public/branding/logo.png`; a interface usa `object-fit: contain` e não deforma a imagem.
-
-## Deploy
-
-O workflow em `.github/workflows/deploy-pages.yml` publica a cada push em `main`. No GitHub, selecione **Settings → Pages → Source: GitHub Actions**. URL esperada: https://gui130699.github.io/SispDemandas/
+Ative Email/Senha no Firebase Authentication e autorize `gui130699.github.io`. O workflow `.github/workflows/deploy-pages.yml` publica cada push em `main` em https://gui130699.github.io/SispDemandas/.
