@@ -12,6 +12,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
 import type { Company, Role, UserProfile } from "../types/models";
@@ -88,9 +89,12 @@ const roleLabels: Record<Role, string> = {
 
 export function UsersPage() {
   const { profile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<UserProfile[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(
+    () => searchParams.get("novo") === "1",
+  );
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<Role>("requester");
   const [saving, setSaving] = useState(false);
@@ -111,6 +115,10 @@ export function UsersPage() {
       ),
     [],
   );
+
+  useEffect(() => {
+    if (searchParams.get("novo") === "1") setShowForm(true);
+  }, [searchParams]);
 
   useEffect(
     () =>
@@ -165,6 +173,7 @@ export function UsersPage() {
       form.reset();
       setRole("requester");
       setShowForm(false);
+      setSearchParams({});
       setNotice(
         "Usuário cadastrado. O e-mail para definição de senha foi enviado.",
       );
@@ -190,6 +199,7 @@ export function UsersPage() {
             type="button"
             onClick={() => {
               setShowForm((current) => !current);
+              setSearchParams({});
               setError("");
               setNotice("");
             }}
@@ -263,7 +273,10 @@ export function UsersPage() {
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setSearchParams({});
+                }}
               >
                 Cancelar
               </button>
