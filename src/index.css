@@ -378,6 +378,10 @@ dd {
 .registration-login { display: inline-flex; gap: 9px; margin-top: 22px; color: var(--blue); font-weight: 700; text-decoration: none; }
 .registration-login span { transition: transform .18s ease; }
 .registration-login:hover span { transform: translateX(3px); }
+.profile-back { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; margin: 4px 0 16px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--blue); font-weight: 700; cursor: pointer; }
+.profile-back:hover, .profile-back:focus-visible { border-color: var(--blue); background: #edf5ff; outline: none; }
+.profile-back span { font-size: 18px; line-height: 1; transition: transform .18s ease; }
+.profile-back:hover span { transform: translateX(-3px); }
 .auth-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
