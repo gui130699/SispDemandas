@@ -362,6 +362,22 @@ dd {
   gap: 16px;
   margin: 24px 0;
 }
+.registration-card { width: min(680px, 94vw); padding: 30px 38px 34px; }
+.registration-heading { margin: 24px 0 20px; }
+.registration-heading > span { color: var(--blue); font-size: 12px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.registration-heading h1 { max-width: 560px; margin: 7px 0 8px; font-size: clamp(29px, 5vw, 40px); letter-spacing: -.035em; line-height: 1.08; }
+.registration-heading h1 b { color: var(--blue); }
+.registration-heading p { color: var(--muted); margin: 0; }
+.registration-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.registration-choice { display: flex; min-height: 224px; padding: 20px; flex-direction: column; align-items: flex-start; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(145deg, var(--surface), #edf5ff); box-shadow: 0 7px 22px #07162d0b; color: var(--text); cursor: pointer; text-align: left; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.registration-choice:hover, .registration-choice:focus-visible { border-color: var(--blue); box-shadow: 0 13px 28px #0b4b8a26; outline: none; transform: translateY(-3px); }
+.choice-icon { display: grid; width: 38px; height: 38px; margin-bottom: 14px; place-items: center; border-radius: 11px; background: #e7f1ff; color: var(--blue); font-size: 24px; }
+.registration-choice strong { font-size: 24px; }
+.registration-choice small { margin-top: 7px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.choice-link { margin-top: auto; color: var(--blue); font-size: 13px; font-weight: 750; }
+.registration-login { display: inline-flex; gap: 9px; margin-top: 22px; color: var(--blue); font-weight: 700; text-decoration: none; }
+.registration-login span { transition: transform .18s ease; }
+.registration-login:hover span { transform: translateX(3px); }
 .auth-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -452,6 +468,9 @@ dd {
   .cards {
     grid-template-columns: repeat(2, 1fr);
   }
+  .registration-card { padding: 27px 24px 30px; }
+  .registration-choices { grid-template-columns: 1fr; }
+  .registration-choice { min-height: 178px; }
   .details,
   .form-grid {
     grid-template-columns: 1fr;
