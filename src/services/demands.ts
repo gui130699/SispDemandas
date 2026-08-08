@@ -12,10 +12,9 @@ export async function createDemand(data: { title: string; description: string; s
   }); await audit(user, "create", "demand", ref.id, data.companyId, undefined, { code }); return ref.id;
 }
 
-export async function changeDemandStatus(demand: Demand, status: DemandStatus, user: UserProfile, resolution?: string, observation?: string) {
-  if (status.isFinal && status.name.toLowerCase().includes("conclu") && !resolution?.trim()) throw new Error("Informe a solução aplicada para finalizar a demanda.");
+export async function changeDemandStatus(demand: Demand, status: DemandStatus, user: UserProfile, observation?: string) {
   if (!observation?.trim()) throw new Error("Informe uma observação sobre a alteração de status.");
-  const patch = { status: status.legacyKeys?.[0] ?? "analysis", statusId: status.id, statusName: status.name, statusColor: status.color, statusUpdatedAt: serverTimestamp(), updatedBy: user.uid, updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp(), ...(status.name.toLowerCase().includes("execu") ? { startedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("paus") ? { pausedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("conclu") ? { completedAt: serverTimestamp(), completedBy: user.uid, resolution: resolution!.trim() } : {}) };
+  const patch = { status: status.legacyKeys?.[0] ?? "analysis", statusId: status.id, statusName: status.name, statusColor: status.color, statusUpdatedAt: serverTimestamp(), updatedBy: user.uid, updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp(), ...(status.name.toLowerCase().includes("execu") ? { startedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("paus") ? { pausedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("conclu") ? { completedAt: serverTimestamp(), completedBy: user.uid } : {}) };
   await updateDoc(doc(db, "demands", demand.id), patch); await addDoc(collection(db, "demands", demand.id, "history"), { type: "status", statusId: status.id, statusName: status.name, observation: observation.trim(), authorId: user.uid, authorName: user.name, createdAt: serverTimestamp() }); await audit(user, "status", "demand", demand.id, demand.companyId, undefined, { statusId: status.id, observation: observation.trim() });
 }
 export async function acceptDemand(demand: Demand, consultant: UserProfile) {

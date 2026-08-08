@@ -93,7 +93,6 @@ export interface Demand {
   pauseReason?: string | null;
   completedAt?: Timestamp | null;
   completedBy?: string | null;
-  resolution?: string | null;
   cancelledAt?: Timestamp | null;
   deletedAt?: Timestamp | null;
   deletedBy?: string | null;

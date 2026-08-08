@@ -325,12 +325,6 @@ export function DemandDetailPage() {
           <span>Descrição</span>
           <strong title={demand.description}>{demand.description}</strong>
         </div>
-        <div className="demand-summary-item">
-          <span>Solução</span>
-          <strong title={demand.resolution || "—"}>
-            {demand.resolution || "—"}
-          </strong>
-        </div>
       </section>
       <section className="demand-controls">
         {canManage && (
@@ -370,16 +364,11 @@ export function DemandDetailPage() {
                 onChange={async (e) => {
                   const next = statuses.find((s) => s.id === e.target.value);
                   if (!next || !profile) return;
-                  let resolution = "";
-                  if (next.isFinal && next.name.toLowerCase().includes("conclu"))
-                    resolution =
-                      window.prompt("Solução aplicada (obrigatória):") || "";
                   try {
                     await changeDemandStatus(
                       demand,
                       next,
                       profile,
-                      resolution,
                       statusObservation,
                     );
                     setStatusObservation("");
