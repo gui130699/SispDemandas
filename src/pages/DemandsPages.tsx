@@ -258,6 +258,7 @@ export function DemandDetailPage() {
   const [editingObservation, setEditingObservation] = useState("");
   const [workflowStatusIds, setWorkflowStatusIds] = useState<string[]>([]);
   const [savingWorkflow, setSavingWorkflow] = useState(false);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [error, setError] = useState("");
   useEffect(
     () =>
@@ -384,7 +385,14 @@ export function DemandDetailPage() {
         </div>
         <div className="demand-summary-item demand-summary-description">
           <span>Descrição</span>
-          <strong title={demand.description}>{demand.description}</strong>
+          <button
+            type="button"
+            className="demand-description-trigger"
+            title="Ver descrição completa"
+            onClick={() => setDescriptionOpen(true)}
+          >
+            {demand.description}
+          </button>
         </div>
       </section>
       <section className="demand-controls">
@@ -671,6 +679,33 @@ export function DemandDetailPage() {
           )}
         </div>
       </section>
+      {descriptionOpen && (
+        <div
+          className="demand-description-modal-backdrop"
+          onMouseDown={() => setDescriptionOpen(false)}
+        >
+          <section
+            className="demand-description-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="demand-description-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="demand-description-modal-header">
+              <h2 id="demand-description-title">Descrição da demanda</h2>
+              <button
+                type="button"
+                className="demand-description-close"
+                aria-label="Fechar descrição"
+                onClick={() => setDescriptionOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <p>{demand.description}</p>
+          </section>
+        </div>
+      )}
     </Page>
   );
 }
