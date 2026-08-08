@@ -313,7 +313,8 @@ export function DemandDetailPage() {
       </Page>
   );
   const current = resolveStatus(demand, statuses);
-  const canManage = profile?.role === "admin" || profile?.role === "consultant";
+  const canManageStatus = profile?.role === "consultant";
+  const canDelete = profile?.role === "admin" || profile?.role === "consultant";
   const defaultWorkflowStatusIds = statuses
     .filter((status) =>
       status.legacyKeys?.some((key) =>
@@ -378,7 +379,7 @@ export function DemandDetailPage() {
         </div>
       </section>
       <section className="demand-controls">
-        {canManage && (
+        {canManageStatus && (
           <div className="demand-status-update">
             <label>
               Observação deste status *
@@ -480,15 +481,6 @@ export function DemandDetailPage() {
               >
                 {savingObservation ? "Salvando…" : "Salvar observação"}
               </button>
-              <button
-                className="danger"
-                onClick={() =>
-                  profile &&
-                  softDeleteDemand(demand, profile, "Exclusão lógica solicitada")
-                }
-              >
-                Mover para lixeira
-              </button>
             </div>
           </div>
         )}
@@ -549,6 +541,19 @@ export function DemandDetailPage() {
             </button>
           </details>
         )}
+        {canDelete && (
+          <div className="actions demand-delete-action">
+            <button
+              className="danger"
+              onClick={() =>
+                profile &&
+                softDeleteDemand(demand, profile, "Exclusão lógica solicitada")
+              }
+            >
+              Mover para lixeira
+            </button>
+          </div>
+        )}
         {error && <p className="error">{error}</p>}
       </section>
       <section className="panel status-history">
@@ -568,7 +573,7 @@ export function DemandDetailPage() {
                     {latest.createdAt?.toDate().toLocaleString("pt-BR") || "Agora"}
                   </small>
                 </p>
-                {canManage && (
+                {canManageStatus && (
                   <button
                     type="button"
                     className="status-report-edit"
