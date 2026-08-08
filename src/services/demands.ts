@@ -32,13 +32,22 @@ export async function editStatusObservation(demand: Demand, historyId: string, u
   if (!observation.trim()) throw new Error("Informe uma observação antes de salvar.");
   await updateDoc(doc(db, "demands", demand.id, "history", historyId), { observation: observation.trim(), edited: true, updatedAt: serverTimestamp(), updatedBy: user.uid, updatedByName: user.name });
 }
-export async function acceptDemand(demand: Demand, consultant: UserProfile) {
+export async function acceptDemand(demand: Demand, consultant: UserProfile, workflowStatusIds: string[]) {
   if (consultant.role !== "consultant") throw new Error("Apenas consultores podem assumir demandas.");
   if (demand.consultantId) throw new Error("Esta demanda já possui um consultor.");
   if (!consultant.companyIds?.includes(demand.companyId)) throw new Error("Vincule-se à empresa antes de assumir esta demanda.");
-  await updateDoc(doc(db, "demands", demand.id), { consultantId: consultant.uid, consultantName: consultant.name, updatedBy: consultant.uid, updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp() });
+  if (!workflowStatusIds.length) throw new Error("Selecione ao menos um status para a demanda.");
+  await updateDoc(doc(db, "demands", demand.id), { consultantId: consultant.uid, consultantName: consultant.name, workflowStatusIds: [...new Set(workflowStatusIds)], updatedBy: consultant.uid, updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp() });
   await addDoc(collection(db, "demands", demand.id, "history"), { type: "assignment", consultantId: consultant.uid, consultantName: consultant.name, authorId: consultant.uid, authorName: consultant.name, createdAt: serverTimestamp() });
   await audit(consultant, "accept", "demand", demand.id, demand.companyId, { consultantId: null }, { consultantId: consultant.uid });
+}
+export async function updateDemandWorkflowStatuses(demand: Demand, consultant: UserProfile, workflowStatusIds: string[]) {
+  if (consultant.role !== "consultant" || demand.consultantId !== consultant.uid) throw new Error("Apenas o consultor responsável pode configurar as etapas.");
+  const uniqueStatusIds = [...new Set(workflowStatusIds)];
+  if (!uniqueStatusIds.length) throw new Error("Selecione ao menos um status para a demanda.");
+  if (demand.statusId && !uniqueStatusIds.includes(demand.statusId)) throw new Error("O status atual deve permanecer selecionado.");
+  await updateDoc(doc(db, "demands", demand.id), { workflowStatusIds: uniqueStatusIds, updatedBy: consultant.uid, updatedAt: serverTimestamp() });
+  await audit(consultant, "workflow_statuses", "demand", demand.id, demand.companyId, undefined, { workflowStatusIds: uniqueStatusIds });
 }
 
 export async function softDeleteDemand(demand: Demand, user: UserProfile, reason: string) { await updateDoc(doc(db, "demands", demand.id), { deletedAt: serverTimestamp(), deletedBy: user.uid, deleteReason: reason.trim(), updatedAt: serverTimestamp() }); await audit(user, "trash", "demand", demand.id, demand.companyId, undefined, { reason }); }

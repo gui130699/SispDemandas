@@ -85,6 +85,7 @@ export interface Demand {
   statusColor?: string;
   statusUpdatedAt?: Timestamp;
   statusHistoryId?: string;
+  workflowStatusIds?: string[];
   consultantId: string | null;
   consultantName: string | null;
   executionApprovedAt?: Timestamp | null;

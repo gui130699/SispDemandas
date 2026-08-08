@@ -17,6 +17,7 @@ import {
   editStatusObservation,
   saveStatusObservation,
   softDeleteDemand,
+  updateDemandWorkflowStatuses,
 } from "../services/demands";
 import { resolveStatus } from "../services/statuses";
 import type {
@@ -246,6 +247,8 @@ export function DemandDetailPage() {
   const [savingObservation, setSavingObservation] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState("");
   const [editingObservation, setEditingObservation] = useState("");
+  const [workflowStatusIds, setWorkflowStatusIds] = useState<string[]>([]);
+  const [savingWorkflow, setSavingWorkflow] = useState(false);
   const [error, setError] = useState("");
   useEffect(
     () =>
@@ -288,6 +291,21 @@ export function DemandDetailPage() {
       ),
     [id],
   );
+  useEffect(() => {
+    if (profile?.role !== "consultant" || demand?.consultantId !== profile.uid) {
+      return;
+    }
+    const defaults = statuses
+      .filter((status) =>
+        status.legacyKeys?.some((key) =>
+          ["analysis", "development", "waiting_validation", "completed"].includes(
+            key,
+          ),
+        ),
+      )
+      .map((status) => status.id);
+    setWorkflowStatusIds(demand.workflowStatusIds?.length ? demand.workflowStatusIds : defaults);
+  }, [demand?.consultantId, demand?.workflowStatusIds, profile?.role, profile?.uid, statuses]);
   if (!demand)
     return (
       <Page title="Demanda">
@@ -296,6 +314,28 @@ export function DemandDetailPage() {
   );
   const current = resolveStatus(demand, statuses);
   const canManage = profile?.role === "admin" || profile?.role === "consultant";
+  const defaultWorkflowStatusIds = statuses
+    .filter((status) =>
+      status.legacyKeys?.some((key) =>
+        ["analysis", "development", "waiting_validation", "completed"].includes(
+          key,
+        ),
+      ),
+    )
+    .map((status) => status.id);
+  const configuredWorkflowStatusIds =
+    demand.workflowStatusIds?.length
+      ? demand.workflowStatusIds
+      : defaultWorkflowStatusIds;
+  const allowedWorkflowStatusIds = new Set([
+    ...configuredWorkflowStatusIds,
+    ...(demand.statusId ? [demand.statusId] : []),
+  ]);
+  const availableStatuses = statuses.filter(
+    (status) => status.active && allowedWorkflowStatusIds.has(status.id),
+  );
+  const canConfigureWorkflow =
+    profile?.role === "consultant" && demand.consultantId === profile.uid;
   const statusGroups = history
     .filter((event) => event.type === "status")
     .reduce((groups, event) => {
@@ -354,9 +394,14 @@ export function DemandDetailPage() {
                 <button
                   type="button"
                   className="primary"
+                  disabled={!defaultWorkflowStatusIds.length}
                   onClick={async () => {
                     try {
-                      await acceptDemand(demand, profile);
+                      await acceptDemand(
+                        demand,
+                        profile,
+                        defaultWorkflowStatusIds,
+                      );
                     } catch (err) {
                       setError(
                         err instanceof Error
@@ -401,9 +446,7 @@ export function DemandDetailPage() {
                 }}
               >
                 <option value="">Alterar status…</option>
-                {statuses
-                  .filter((s) => s.active)
-                  .map((s) => (
+                {availableStatuses.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
@@ -447,6 +490,63 @@ export function DemandDetailPage() {
               </button>
             </div>
           </div>
+        )}
+        {canConfigureWorkflow && (
+          <details className="workflow-statuses">
+            <summary>Etapas usadas nesta demanda</summary>
+            <p>
+              Por padrão, a demanda utiliza Em análise, Em execução,
+              Aguardando validação e Concluído. Ajuste apenas se necessário.
+            </p>
+            <div className="workflow-status-options">
+              {statuses
+                .filter((status) => status.active)
+                .map((status) => (
+                  <label key={status.id}>
+                    <input
+                      type="checkbox"
+                      checked={workflowStatusIds.includes(status.id)}
+                      disabled={status.id === demand.statusId}
+                      onChange={(event) =>
+                        setWorkflowStatusIds((currentIds) =>
+                          event.target.checked
+                            ? [...new Set([...currentIds, status.id])]
+                            : currentIds.filter((id) => id !== status.id),
+                        )
+                      }
+                    />
+                    {status.name}
+                  </label>
+                ))}
+            </div>
+            <button
+              type="button"
+              className="primary"
+              disabled={!workflowStatusIds.length || savingWorkflow}
+              onClick={async () => {
+                if (!profile) return;
+                setSavingWorkflow(true);
+                setError("");
+                try {
+                  await updateDemandWorkflowStatuses(
+                    demand,
+                    profile,
+                    workflowStatusIds,
+                  );
+                } catch (err) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : "Não foi possível salvar as etapas.",
+                  );
+                } finally {
+                  setSavingWorkflow(false);
+                }
+              }}
+            >
+              {savingWorkflow ? "Salvando…" : "Salvar etapas"}
+            </button>
+          </details>
         )}
         {error && <p className="error">{error}</p>}
       </section>

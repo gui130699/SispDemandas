@@ -379,6 +379,41 @@ header small {
   margin: 0;
   justify-content: flex-end;
 }
+.workflow-statuses {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+}
+.workflow-statuses summary {
+  color: var(--blue);
+  font-weight: 750;
+  cursor: pointer;
+}
+.workflow-statuses p {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.workflow-status-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 16px;
+  margin-bottom: 13px;
+}
+.workflow-status-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+.workflow-status-options input {
+  width: auto;
+  margin: 0;
+}
 .status-history {
   display: grid;
   gap: 0;
