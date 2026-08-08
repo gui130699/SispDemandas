@@ -96,9 +96,6 @@ export interface Demand {
   completedAt?: Timestamp | null;
   completedBy?: string | null;
   cancelledAt?: Timestamp | null;
-  deletedAt?: Timestamp | null;
-  deletedBy?: string | null;
-  deleteReason?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   lastActivityAt?: Timestamp;

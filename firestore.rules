@@ -20,11 +20,8 @@ service cloud.firestore {
         && request.resource.data.observation is string
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['observation', 'edited', 'updatedAt', 'updatedBy', 'updatedByName']);
     }
-    function adminCanTrashDemand() {
-      return admin()
-        && request.resource.data.deletedAt != null
-        && request.resource.data.deletedBy == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedAt', 'deletedBy', 'deleteReason', 'updatedAt']);
+    function preservesTrashFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['deletedAt', 'deletedBy', 'deleteReason']);
     }
     function sameCompany(companyId) { return requester() && profile().companyId == companyId; }
     function consultantCompany(companyId) { return consultant() && companyId in profile().companyIds; }
@@ -49,8 +46,8 @@ service cloud.firestore {
     match /counters/{id} { allow read: if active(); allow write: if active(); }
     match /demands/{id} {
       allow read: if admin() || consultantCompany(resource.data.companyId) || sameCompany(resource.data.companyId);
-      allow create: if active() && ((requester() && request.resource.data.companyId == profile().companyId) || consultantCompany(request.resource.data.companyId)) && request.resource.data.status == 'analysis' && request.resource.data.deletedAt == null;
-      allow update: if adminCanTrashDemand() || assignedOrAvailable(resource.data) || (sameCompany(resource.data.companyId) && request.resource.data.companyId == resource.data.companyId && request.resource.data.consultantId == resource.data.consultantId && request.resource.data.statusId == resource.data.statusId);
+      allow create: if active() && ((requester() && request.resource.data.companyId == profile().companyId) || consultantCompany(request.resource.data.companyId)) && request.resource.data.status == 'analysis';
+      allow update: if preservesTrashFields() && (assignedOrAvailable(resource.data) || (sameCompany(resource.data.companyId) && request.resource.data.companyId == resource.data.companyId && request.resource.data.consultantId == resource.data.consultantId && request.resource.data.statusId == resource.data.statusId));
       allow delete: if false;
       match /publicNotes/{note} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false; }
       match /internalNotes/{note} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false; }

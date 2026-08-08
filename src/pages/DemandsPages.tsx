@@ -16,7 +16,6 @@ import {
   acceptDemand,
   editStatusObservation,
   saveStatusObservation,
-  softDeleteDemand,
   updateDemandWorkflowStatuses,
 } from "../services/demands";
 import { resolveStatus } from "../services/statuses";
@@ -85,7 +84,6 @@ export function DemandsPage() {
     () =>
       items.filter(
         (d) =>
-          !d.deletedAt &&
           `${d.code} ${d.title} ${d.companyName}`
             .toLowerCase()
             .includes(filter.toLowerCase()),
@@ -324,7 +322,6 @@ export function DemandDetailPage() {
   );
   const current = resolveStatus(demand, statuses);
   const canManageStatus = profile?.role === "consultant";
-  const canDelete = profile?.role === "admin" || profile?.role === "consultant";
   const defaultWorkflowStatusIds = statuses
     .filter((status) =>
       status.legacyKeys?.some((key) =>
@@ -343,8 +340,19 @@ export function DemandDetailPage() {
     ...(demand.statusId ? [demand.statusId] : []),
   ]);
   const availableStatuses = statuses.filter(
-    (status) => status.active && allowedWorkflowStatusIds.has(status.id),
+    (status) =>
+      status.active &&
+      !status.legacyKeys?.includes("cancelled") &&
+      allowedWorkflowStatusIds.has(status.id),
   );
+  const cancelledStatus = statuses.find((status) =>
+    status.legacyKeys?.includes("cancelled"),
+  );
+  const analysisStatus = statuses.find((status) =>
+    status.legacyKeys?.includes("analysis"),
+  );
+  const canReopen =
+    canManageStatus && demand.status === "cancelled" && Boolean(analysisStatus);
   const canConfigureWorkflow =
     profile?.role === "consultant" && demand.consultantId === profile.uid;
   const statusGroups = history
@@ -381,7 +389,40 @@ export function DemandDetailPage() {
         </div>
         <div className="demand-summary-item">
           <span>Status</span>
-          <strong>{current.name}</strong>
+          {canReopen ? (
+            <button
+              type="button"
+              className="demand-status-reopen"
+              onClick={async () => {
+                if (
+                  !profile ||
+                  !analysisStatus ||
+                  !window.confirm(
+                    "Deseja reabrir esta demanda? Ela voltará para Em análise.",
+                  )
+                )
+                  return;
+                try {
+                  await changeDemandStatus(
+                    demand,
+                    analysisStatus,
+                    profile,
+                    "Demanda reaberta pelo consultor.",
+                  );
+                } catch (err) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : "Não foi possível reabrir a demanda.",
+                  );
+                }
+              }}
+            >
+              {current.name}
+            </button>
+          ) : (
+            <strong>{current.name}</strong>
+          )}
         </div>
         <div className="demand-summary-item demand-summary-description">
           <span>Descrição</span>
@@ -435,6 +476,7 @@ export function DemandDetailPage() {
               <select
                 aria-label="Alterar status"
                 defaultValue=""
+                disabled={demand.status === "cancelled"}
                 onChange={async (e) => {
                   const statusSelect = e.currentTarget;
                   const next = statuses.find((s) => s.id === statusSelect.value);
@@ -471,6 +513,33 @@ export function DemandDetailPage() {
                     </option>
                   ))}
               </select>
+              {cancelledStatus && demand.status !== "cancelled" && (
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={!statusObservation.trim()}
+                  onClick={async () => {
+                    if (!profile) return;
+                    try {
+                      await changeDemandStatus(
+                        demand,
+                        cancelledStatus,
+                        profile,
+                        statusObservation,
+                      );
+                      setStatusObservation("");
+                    } catch (err) {
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : "Não foi possível cancelar a demanda.",
+                      );
+                    }
+                  }}
+                >
+                  Cancelar demanda
+                </button>
+              )}
               <button
                 type="button"
                 className="primary"
@@ -510,7 +579,10 @@ export function DemandDetailPage() {
             </p>
             <div className="workflow-status-options">
               {statuses
-                .filter((status) => status.active)
+                .filter(
+                  (status) =>
+                    status.active && !status.legacyKeys?.includes("cancelled"),
+                )
                 .map((status) => (
                   <label key={status.id}>
                     <input
@@ -557,19 +629,6 @@ export function DemandDetailPage() {
               {savingWorkflow ? "Salvando…" : "Salvar etapas"}
             </button>
           </details>
-        )}
-        {canDelete && (
-          <div className="actions demand-delete-action">
-            <button
-              className="danger"
-              onClick={() =>
-                profile &&
-                softDeleteDemand(demand, profile, "Exclusão lógica solicitada")
-              }
-            >
-              Mover para lixeira
-            </button>
-          </div>
         )}
         {error && <p className="error">{error}</p>}
       </section>
