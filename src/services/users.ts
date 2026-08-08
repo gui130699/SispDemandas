@@ -84,7 +84,6 @@ export async function createManagedUser(
 
 export async function approveRegistration(user: UserProfile, admin: UserProfile, companyIds?: string[], defaultSector?: string) {
   const cleanCompanyIds = [...new Set(companyIds ?? user.requestedCompanyIds ?? user.companyIds ?? [])];
-  if (user.role === "consultant" && !cleanCompanyIds.length) throw new Error("Selecione ao menos uma empresa para o consultor.");
   if (user.role === "requester" && !user.companyId) throw new Error("Cliente sem empresa vinculada.");
   const batch = writeBatch(db);
   batch.update(doc(db, "users", user.uid), {
