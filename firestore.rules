@@ -150,7 +150,7 @@ service cloud.firestore {
       // or an authorized consultant. Server-side privileged workflows are not
       // enabled until Cloud Functions can be deployed.
       allow create: if active() && ((requester() && request.resource.data.companyId == profile().companyId) || consultantCompany(request.resource.data.companyId));
-      allow update: if immutableDemandFields() && (admin() || sameCompany(resource.data.companyId) || (consultantCompany(resource.data.companyId) && (resource.data.consultantId == request.auth.uid || resource.data.consultantId == null)));
+      allow update: if immutableDemandFields() && (admin() || (consultantCompany(resource.data.companyId) && (resource.data.consultantId == request.auth.uid || resource.data.consultantId == null)));
       allow delete: if false;
 
       match /publicNotes/{note} {
