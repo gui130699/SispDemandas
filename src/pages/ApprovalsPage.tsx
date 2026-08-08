@@ -1,4 +1,4 @@
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
@@ -8,7 +8,7 @@ import { Page } from "./DashboardPage";
 
 export function ApprovalsPage() {
   const { profile } = useAuth(); const [users, setUsers] = useState<UserProfile[]>([]); const [companies, setCompanies] = useState<Company[]>([]); const [message, setMessage] = useState("");
-  useEffect(() => onSnapshot(query(collection(db, "users"), where("registrationStatus", "==", "pending"), orderBy("createdAt", "desc")), snapshot => setUsers(snapshot.docs.map(item => ({ uid: item.id, ...item.data() }) as UserProfile)), () => setMessage("Não foi possível carregar as aprovações. Verifique o índice do Firestore.")), []);
+  useEffect(() => onSnapshot(query(collection(db, "users"), where("registrationStatus", "==", "pending")), snapshot => setUsers(snapshot.docs.map(item => ({ uid: item.id, ...item.data() }) as UserProfile).sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))), () => setMessage("Não foi possível carregar as aprovações. Verifique sua permissão de administrador.")), []);
   useEffect(() => onSnapshot(collection(db, "companies"), snapshot => setCompanies(snapshot.docs.map(item => ({ id: item.id, ...item.data() }) as Company))), []);
   if (profile?.role !== "admin") return <Page title="Acesso negado"><p>Área exclusiva de administradores.</p></Page>;
   const admin = profile;
