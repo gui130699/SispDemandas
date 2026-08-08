@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest",
-    "test:run": "vitest run",
-    "test:rules": "vitest run src/tests/firestore.rules.test.ts"
+    "test:run": "vitest run src/tests/utils.test.ts",
+    "test:rules": "firebase emulators:exec --only firestore \"npm run test:rules:emulator\"",
+    "test:rules:emulator": "vitest run src/tests/firestore.rules.test.ts"
   },
   "dependencies": {
     "firebase": "^12.17.1",

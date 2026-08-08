@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
 import type { Company, Demand } from "../types/models";
-import { linkConsultantCompany } from "../services/users";
+import { requestConsultantCompanyAccess } from "../services/users";
 import { elapsedDays } from "../utils/dates";
 
 export function DashboardPage() {
@@ -122,15 +122,15 @@ export function DashboardPage() {
         {profile?.role === "consultant" && (
           <div className="dashboard-company-link">
             <select
-              aria-label="Empresa para vincular"
+              aria-label="Empresa para solicitar acesso"
               value={companyToLink}
               onChange={(event) => setCompanyToLink(event.target.value)}
               disabled={!availableCompanies.length || linkingCompany}
             >
               <option value="">
                 {availableCompanies.length
-                  ? "Vincular outra empresa"
-                  : "Todas as empresas estão vinculadas"}
+                  ? "Solicitar acesso a empresa"
+                  : "Não há outras empresas ativas"}
               </option>
               {availableCompanies.map((company) => (
                 <option key={company.id} value={company.id}>
@@ -147,21 +147,22 @@ export function DashboardPage() {
                 setLinkError("");
                 setLinkingCompany(true);
                 try {
-                  await linkConsultantCompany(profile, companyToLink);
-                  setSelectedCompanyId(companyToLink);
+                  const company = availableCompanies.find((item) => item.id === companyToLink);
+                  if (!company) return;
+                  await requestConsultantCompanyAccess(profile, company);
                   setCompanyToLink("");
                 } catch (error) {
                   setLinkError(
                     error instanceof Error
                       ? error.message
-                      : "Não foi possível vincular a empresa.",
+                      : "Não foi possível solicitar acesso à empresa.",
                   );
                 } finally {
                   setLinkingCompany(false);
                 }
               }}
             >
-              {linkingCompany ? "Vinculando…" : "Vincular empresa"}
+              {linkingCompany ? "Solicitando…" : "Solicitar acesso"}
             </button>
           </div>
         )}

@@ -166,7 +166,7 @@ export function DemandFormPage() {
     if (!profile) return;
     const f = new FormData(e.currentTarget),
       initial =
-        statuses.find((s) => s.legacyKeys?.includes("analysis")) ??
+        statuses.find((s) => s.active && s.isInitial) ??
         statuses.find((s) => s.active);
     if (!initial) {
       setError(
@@ -185,11 +185,8 @@ export function DemandFormPage() {
           levelName: String(f.get("level")),
           priority: String(f.get("priority")) as Priority,
           companyId: profile.companyId || String(f.get("companyId")),
-          companyName: profile.companyName || String(f.get("companyName")),
           requesterSector: String(f.get("sector") || ""),
         },
-        profile,
-        initial,
       );
       go(`/demandas/${id}`);
     } catch (err) {
@@ -215,9 +212,6 @@ export function DemandFormPage() {
           <>
             <label>
               Empresa (ID) *<input name="companyId" required />
-            </label>
-            <label>
-              Nome da empresa *<input name="companyName" required />
             </label>
           </>
         )}

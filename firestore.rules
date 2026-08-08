@@ -7,54 +7,142 @@ service cloud.firestore {
     function admin() { return active() && profile().role == 'admin'; }
     function consultant() { return active() && profile().role == 'consultant'; }
     function requester() { return active() && profile().role == 'requester'; }
-    function consultantOwnCompanyLink(uid) {
-      return consultant() && uid == request.auth.uid
-        && request.resource.data.companyIds is list
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['companyIds', 'updatedAt']);
-    }
-    function canManageDemand(demandId) {
-      return assignedOrAvailable(get(/databases/$(database)/documents/demands/$(demandId)).data);
-    }
-    function canEditStatusObservation(demandId) {
-      return canManageDemand(demandId)
-        && request.resource.data.observation is string
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['observation', 'edited', 'updatedAt', 'updatedBy', 'updatedByName']);
-    }
-    function preservesTrashFields() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['deletedAt', 'deletedBy', 'deleteReason']);
-    }
     function sameCompany(companyId) { return requester() && profile().companyId == companyId; }
-    function consultantCompany(companyId) { return consultant() && companyId in profile().companyIds; }
-    function assignedOrAvailable(demand) { return consultantCompany(demand.companyId) && (demand.consultantId == request.auth.uid || demand.consultantId == null); }
-    function ownerCandidate() { return signedIn() && exists(/databases/$(database)/documents/bootstrapConfig/owner) && get(/databases/$(database)/documents/bootstrapConfig/owner).data.initialized == false && get(/databases/$(database)/documents/bootstrapConfig/owner).data.emailNormalized == request.auth.token.email; }
+    function consultantCompany(companyId) {
+      return consultant() && profile().companyIds is list && companyId in profile().companyIds;
+    }
+    function ownsDemand(demand) { return sameCompany(demand.companyId); }
+    function canReadDemand(demand) { return admin() || ownsDemand(demand) || consultantCompany(demand.companyId); }
+    function ownerCandidate() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/bootstrapConfig/owner)
+        && get(/databases/$(database)/documents/bootstrapConfig/owner).data.initialized == false
+        && get(/databases/$(database)/documents/bootstrapConfig/owner).data.emailNormalized == request.auth.token.email;
+    }
     function validPendingRegistration() {
-      return signedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.active == false && request.resource.data.registrationStatus == 'pending' && request.resource.data.name is string && request.resource.data.emailNormalized == request.auth.token.email && ((request.resource.data.role == 'requester' && request.resource.data.companyId is string && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId)) && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active == true) || (request.resource.data.role == 'consultant' && request.resource.data.companyIds is list));
+      return signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.active == false
+        && request.resource.data.registrationStatus == 'pending'
+        && request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.emailNormalized == request.auth.token.email
+        && request.resource.data.companyIds is list
+        && request.resource.data.requestedCompanyIds is list
+        && ((request.resource.data.role == 'requester'
+          && request.resource.data.companyIds.size() == 0
+          && request.resource.data.requestedCompanyIds.size() == 0
+          && request.resource.data.companyId is string
+          && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId))
+          && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active == true)
+        || (request.resource.data.role == 'consultant'
+          && request.resource.data.companyId == null
+          && request.resource.data.companyIds.size() == 0));
+    }
+    function immutableDemandFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'id', 'code', 'sequence', 'year', 'companyId', 'companyName',
+        'requesterId', 'requesterName', 'createdAt', 'createdBy'
+      ]);
     }
 
-    match /publicConfig/bootstrap { allow get: if true; allow list: if false; allow create: if false; allow update: if admin() || ownerCandidate(); allow delete: if false; }
-    match /bootstrapConfig/owner { allow get: if admin() || ownerCandidate(); allow create: if false; allow update: if admin() || ownerCandidate(); allow delete: if false; }
+    match /publicConfig/bootstrap {
+      allow get: if true;
+      allow list, create, delete: if false;
+      allow update: if admin() || ownerCandidate();
+    }
+    match /bootstrapConfig/owner {
+      allow get: if admin() || ownerCandidate();
+      allow create, delete: if false;
+      allow update: if admin() || ownerCandidate();
+    }
 
     match /users/{uid} {
-      allow read: if active() && (admin() || uid == request.auth.uid);
-      allow create: if admin() || validPendingRegistration() || (ownerCandidate() && uid == request.auth.uid && request.resource.data.role == 'admin' && request.resource.data.active == true && request.resource.data.registrationStatus == 'approved' && getAfter(/databases/$(database)/documents/bootstrapConfig/owner).data.initialized == true && getAfter(/databases/$(database)/documents/bootstrapConfig/owner).data.adminUid == request.auth.uid && getAfter(/databases/$(database)/documents/publicConfig/bootstrap).data.initialized == true);
-      allow update: if admin() || consultantOwnCompanyLink(uid); allow delete: if false;
+      allow get: if active() && (admin() || uid == request.auth.uid);
+      allow list: if admin();
+      allow create: if admin() || validPendingRegistration()
+        || (ownerCandidate() && uid == request.auth.uid
+          && request.resource.data.role == 'admin'
+          && request.resource.data.active == true
+          && request.resource.data.registrationStatus == 'approved'
+          && getAfter(/databases/$(database)/documents/bootstrapConfig/owner).data.initialized == true
+          && getAfter(/databases/$(database)/documents/bootstrapConfig/owner).data.adminUid == request.auth.uid
+          && getAfter(/databases/$(database)/documents/publicConfig/bootstrap).data.initialized == true);
+      // A consultant never updates their own companyIds. Only an administrator
+      // (or trusted Admin SDK code) may change authorizations and permissions.
+      allow update: if admin();
+      allow delete: if false;
     }
-    match /companies/{id} { allow get, list: if active() || resource.data.active == true; allow create, update: if admin(); allow delete: if false; }
+
+    match /consultantCompanyRequests/{requestId} {
+      allow get: if active() && (admin() || resource.data.consultantId == request.auth.uid);
+      allow list: if admin();
+      allow create: if consultant()
+        && request.resource.data.keys().hasOnly([
+          'id', 'consultantId', 'consultantName', 'companyId', 'companyName', 'status', 'requestedAt'
+        ])
+        && request.resource.data.id == requestId
+        && requestId == request.auth.uid + '_' + request.resource.data.companyId
+        && request.resource.data.consultantId == request.auth.uid
+        && request.resource.data.consultantName == profile().name
+        && request.resource.data.status == 'pending'
+        && request.resource.data.companyId is string
+        && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId))
+        && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active == true
+        && request.resource.data.companyName == get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.legalName;
+      allow update: if admin();
+      allow delete: if false;
+    }
+
+    match /companies/{id} {
+      allow get: if active() || resource.data.active == true;
+      allow list: if active() || resource.data.active == true;
+      allow create, update: if admin();
+      allow delete: if false;
+    }
     match /uniqueCompanyKeys/{id} { allow read, write: if admin(); }
     match /levels/{id} { allow read: if active(); allow write: if admin(); }
     match /demandStatuses/{id} { allow read: if active(); allow write: if admin(); }
-    match /counters/{id} { allow read: if active(); allow write: if active(); }
+
+    // Counters and audit records are server-only. Cloud Functions use the
+    // Admin SDK and bypass Rules; browser clients cannot forge either record.
+    match /counters/{id} { allow read, write: if false; }
+    match /auditLogs/{id} { allow read: if admin(); allow create, update, delete: if false; }
+
     match /demands/{id} {
-      allow read: if admin() || consultantCompany(resource.data.companyId) || sameCompany(resource.data.companyId);
-      allow create: if active() && ((requester() && request.resource.data.companyId == profile().companyId) || consultantCompany(request.resource.data.companyId)) && request.resource.data.status == 'analysis';
-      allow update: if preservesTrashFields() && (assignedOrAvailable(resource.data) || (sameCompany(resource.data.companyId) && request.resource.data.companyId == resource.data.companyId && request.resource.data.consultantId == resource.data.consultantId && request.resource.data.statusId == resource.data.statusId));
+      allow read: if active() && canReadDemand(resource.data);
+      // Creation and operational updates are callable-Function only. This
+      // prevents browser clients from choosing codes, companies or statuses.
+      allow create: if false;
+      allow update: if admin() && immutableDemandFields();
       allow delete: if false;
-      match /publicNotes/{note} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false; }
-      match /internalNotes/{note} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false; }
-      match /history/{event} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update: if canEditStatusObservation(id); allow delete: if false; }
+
+      match /publicNotes/{note} {
+        allow read: if active() && canReadDemand(get(/databases/$(database)/documents/demands/$(id)).data);
+        allow write: if false;
+      }
+      match /internalNotes/{note} {
+        allow read: if active() && (admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId));
+        allow write: if false;
+      }
+      match /history/{event} {
+        allow read: if active() && canReadDemand(get(/databases/$(database)/documents/demands/$(id)).data);
+        allow write: if false;
+      }
+      match /attachments/{attachmentId} {
+        allow read: if active() && canReadDemand(get(/databases/$(database)/documents/demands/$(id)).data);
+        allow write: if false;
+      }
     }
-    match /notifications/{id} { allow read: if active() && (admin() || resource.data.userId == request.auth.uid); allow create: if admin(); allow update: if active() && resource.data.userId == request.auth.uid; allow delete: if false; }
-    match /auditLogs/{id} { allow read: if admin(); allow create: if active(); allow update, delete: if false; }
+
+    match /notifications/{id} {
+      allow get: if active() && (admin() || resource.data.userId == request.auth.uid);
+      allow list: if active() && (admin() || resource.data.userId == request.auth.uid);
+      allow create: if admin();
+      allow update: if active() && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+      allow delete: if false;
+    }
     match /settings/{id} { allow read: if active(); allow write: if admin(); }
   }
 }

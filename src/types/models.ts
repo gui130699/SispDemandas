@@ -7,13 +7,38 @@ export type LegacyStatus = "new" | "triage" | "waiting_information" | "analysis"
 export type Priority = "low" | "normal" | "high" | "urgent";
 
 export interface ConsultantPermissions {
-  canCreateDemand?: boolean;
-  canEditDemand?: boolean;
-  canChangeStatus?: boolean;
-  canManageInternalNotes?: boolean;
-  canManageAttachments?: boolean;
-  canDeleteDemand?: boolean;
+  takeUnassignedDemand?: boolean;
+  createDemand?: boolean;
+  editDemand?: boolean;
+  changeStatus?: boolean;
+  assignConsultant?: boolean;
+  reassignDemand?: boolean;
+  addPublicNote?: boolean;
+  addInternalNote?: boolean;
+  manageAttachments?: boolean;
+  deleteDemand?: boolean;
+  viewDeletedDemands?: boolean;
+  restoreDemand?: boolean;
+  reopenDemand?: boolean;
+  exportDemands?: boolean;
 }
+
+export const defaultConsultantPermissions: ConsultantPermissions = {
+  takeUnassignedDemand: true,
+  createDemand: false,
+  editDemand: true,
+  changeStatus: true,
+  assignConsultant: false,
+  reassignDemand: false,
+  addPublicNote: true,
+  addInternalNote: true,
+  manageAttachments: false,
+  deleteDemand: false,
+  viewDeletedDemands: false,
+  restoreDemand: false,
+  reopenDemand: false,
+  exportDemands: false,
+};
 
 export interface UserProfile {
   uid: string;
@@ -31,6 +56,12 @@ export interface UserProfile {
   active: boolean;
   registrationStatus?: RegistrationStatus;
   rejectionReason?: string;
+  approvedAt?: Timestamp;
+  approvedBy?: string;
+  approvedByName?: string;
+  rejectedAt?: Timestamp;
+  rejectedBy?: string;
+  rejectedByName?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -56,8 +87,27 @@ export interface DemandStatus {
   color: string;
   order: number;
   active: boolean;
+  textColor?: string;
+  isInitial?: boolean;
   isFinal?: boolean;
+  finalType?: "completed" | "cancelled" | null;
+  isPaused?: boolean;
+  allowedNextStatusIds?: string[];
   legacyKeys?: LegacyStatus[];
+}
+
+export interface ConsultantCompanyRequest {
+  id: string;
+  consultantId: string;
+  consultantName: string;
+  companyId: string;
+  companyName: string;
+  status: "pending" | "approved" | "rejected";
+  requestedAt?: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  rejectionReason?: string | null;
 }
 
 export interface Demand {
