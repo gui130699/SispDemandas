@@ -276,6 +276,19 @@ header small {
   padding-inline: 20px;
   letter-spacing: 0.01em;
 }
+.dashboard-company-filter {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.dashboard-company-filter select {
+  min-width: min(340px, 46vw);
+  margin: 0;
+}
 .demand-summary {
   display: flex;
   align-items: stretch;
@@ -733,6 +746,14 @@ dd {
   }
   .toolbar {
     flex-wrap: wrap;
+  }
+  .dashboard-company-filter {
+    width: 100%;
+    margin-left: 0;
+  }
+  .dashboard-company-filter select {
+    flex: 1;
+    min-width: 0;
   }
   .demand-summary {
     display: grid;

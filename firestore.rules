@@ -29,7 +29,7 @@ service cloud.firestore {
     match /demandStatuses/{id} { allow read: if active(); allow write: if admin(); }
     match /counters/{id} { allow read: if active(); allow write: if active(); }
     match /demands/{id} {
-      allow read: if admin() || assignedOrAvailable(resource.data) || sameCompany(resource.data.companyId);
+      allow read: if admin() || consultantCompany(resource.data.companyId) || sameCompany(resource.data.companyId);
       allow create: if active() && ((requester() && request.resource.data.companyId == profile().companyId) || admin() || consultantCompany(request.resource.data.companyId)) && request.resource.data.status == 'analysis' && request.resource.data.deletedAt == null;
       allow update: if admin() || assignedOrAvailable(resource.data) || (sameCompany(resource.data.companyId) && request.resource.data.companyId == resource.data.companyId && request.resource.data.consultantId == resource.data.consultantId && request.resource.data.statusId == resource.data.statusId);
       allow delete: if false;

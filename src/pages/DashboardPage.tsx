@@ -3,15 +3,44 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
-import type { Demand } from "../types/models";
+import type { Company, Demand } from "../types/models";
 import { elapsedDays } from "../utils/dates";
 
 export function DashboardPage() {
   const { profile } = useAuth();
   const [items, setItems] = useState<Demand[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+
+  useEffect(() => {
+    if (profile?.role !== "consultant") {
+      setCompanies([]);
+      return;
+    }
+    return onSnapshot(
+      query(collection(db, "companies"), where("active", "==", true)),
+      (snapshot) =>
+        setCompanies(
+          snapshot.docs
+            .map((item) => ({ id: item.id, ...item.data() }) as Company)
+            .filter((company) => profile.companyIds?.includes(company.id)),
+        ),
+    );
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile?.role !== "consultant") return;
+    if (!selectedCompanyId || !profile.companyIds?.includes(selectedCompanyId)) {
+      setSelectedCompanyId(profile.companyIds?.[0] ?? "");
+    }
+  }, [profile, selectedCompanyId]);
 
   useEffect(() => {
     if (!profile) return;
+    if (profile.role === "consultant" && !selectedCompanyId) {
+      setItems([]);
+      return;
+    }
     const ref =
       profile.role === "requester"
         ? query(
@@ -21,7 +50,7 @@ export function DashboardPage() {
         : profile.role === "consultant"
           ? query(
               collection(db, "demands"),
-              where("consultantId", "==", profile.uid),
+              where("companyId", "==", selectedCompanyId),
             )
           : query(collection(db, "demands"));
     return onSnapshot(ref, (snapshot) => {
@@ -31,7 +60,7 @@ export function DashboardPage() {
         ),
       );
     });
-  }, [profile]);
+  }, [profile, selectedCompanyId]);
 
   const open = items.filter(
     (item) => !["completed", "cancelled"].includes(item.status),
@@ -59,10 +88,35 @@ export function DashboardPage() {
             Nova demanda
           </Link>
         )}
+        {profile?.role === "consultant" && (
+          <label className="dashboard-company-filter">
+            Empresa atendida
+            <select
+              value={selectedCompanyId}
+              onChange={(event) => setSelectedCompanyId(event.target.value)}
+              disabled={!companies.length}
+            >
+              {!companies.length && <option value="">Nenhuma empresa vinculada</option>}
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.legalName}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <div className="cards">
         {cards.map(([label, value]) => (
-          <Link key={String(label)} className="card" to="/demandas">
+          <Link
+            key={String(label)}
+            className="card"
+            to={
+              profile?.role === "consultant" && selectedCompanyId
+                ? `/demandas?empresa=${encodeURIComponent(selectedCompanyId)}`
+                : "/demandas"
+            }
+          >
             <small>{label}</small>
             <strong>{value}</strong>
           </Link>
@@ -84,7 +138,13 @@ export function DashboardPage() {
               <small>{elapsedDays(demand.createdAt)} dias</small>
             </Link>
           ))}
-        {!open.length && <p className="empty">Nenhuma demanda aberta.</p>}
+        {!open.length && (
+          <p className="empty">
+            {profile?.role === "consultant" && !selectedCompanyId
+              ? "Selecione uma empresa para visualizar as demandas."
+              : "Nenhuma demanda aberta."}
+          </p>
+        )}
       </section>
     </Page>
   );

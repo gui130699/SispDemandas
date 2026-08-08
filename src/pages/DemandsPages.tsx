@@ -7,7 +7,7 @@ import {
   where,
 } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
 import {
@@ -24,11 +24,25 @@ const statusStyle = (color?: string) => ({
 });
 export function DemandsPage() {
   const { profile } = useAuth();
+  const [searchParams] = useSearchParams();
   const [items, setItems] = useState<Demand[]>([]);
   const [statuses, setStatuses] = useState<DemandStatus[]>([]);
   const [filter, setFilter] = useState("");
+  const requestedCompanyId = searchParams.get("empresa");
+  const consultantCompanyId =
+    profile?.role === "consultant" &&
+    profile.companyIds?.includes(requestedCompanyId ?? "")
+      ? requestedCompanyId
+      : profile?.role === "consultant"
+        ? (profile.companyIds?.[0] ?? "")
+        : "";
+
   useEffect(() => {
     if (!profile) return;
+    if (profile.role === "consultant" && !consultantCompanyId) {
+      setItems([]);
+      return;
+    }
     const ref =
       profile.role === "requester"
         ? query(
@@ -36,11 +50,17 @@ export function DemandsPage() {
             where("companyId", "==", profile.companyId),
             orderBy("createdAt", "desc"),
           )
-        : query(collection(db, "demands"), orderBy("createdAt", "desc"));
+        : profile.role === "consultant"
+          ? query(
+              collection(db, "demands"),
+              where("companyId", "==", consultantCompanyId),
+              orderBy("createdAt", "desc"),
+            )
+          : query(collection(db, "demands"), orderBy("createdAt", "desc"));
     return onSnapshot(ref, (s) =>
       setItems(s.docs.map((d) => ({ id: d.id, ...d.data() }) as Demand)),
     );
-  }, [profile]);
+  }, [profile, consultantCompanyId]);
   useEffect(
     () =>
       onSnapshot(
