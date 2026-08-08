@@ -1,0 +1,1406 @@
+====================================================================
+ANÁLISE TÉCNICA COMPLETA — SISPDEMANDAS
+====================================================================
+
+Data/hora da análise: 2026-08-08 14:50:22 -03:00
+Escopo: leitura do código da branch local main, regras Firebase,
+configuração, testes e build. Não houve alteração de código, commit ou push
+como parte desta auditoria. O único arquivo criado é este relatório solicitado.
+
+Convenções de status usadas no relatório:
+- IMPLEMENTADO: confirmado diretamente no código.
+- PARCIALMENTE IMPLEMENTADO: existe, mas falta parte relevante do fluxo.
+- NÃO IMPLEMENTADO: não foi encontrado no código.
+- IMPLEMENTADO COM RISCO: existe, porém há risco técnico, de segurança,
+  consistência ou operação.
+
+====================================================================
+1. IDENTIFICAÇÃO DO PROJETO
+====================================================================
+
+Nome: SISPDEMANDAS
+Repositório remoto: https://github.com/gui130699/SispDemandas.git
+Branch analisada: main
+URL de produção declarada no README/workflow:
+https://gui130699.github.io/SispDemandas/
+Observação: a disponibilidade atual da URL e a execução do último workflow
+não foram verificadas externamente nesta auditoria.
+
+Firebase Project ID: sispdemandas
+Auth domain: sispdemandas.firebaseapp.com
+Storage bucket: sispdemandas.firebasestorage.app
+
+Último commit analisado:
+SHA completo: 115c0f83741003591edfe1bfa96085c16e65e848
+SHA curto: 115c0f8
+Mensagem: feat: replace demand trashing with cancellation
+Data do commit: 2026-08-08 14:48:51 -03:00
+
+Arquivos versionados: 56
+Linhas aproximadas em arquivos versionados: 20.975
+Arquivos físicos do projeto, excluindo node_modules/dist, não aferidos como
+métrica de produto; a árvore versionada é a referência mais confiável.
+
+Runtime local utilizado na auditoria:
+Node.js: v25.1.0
+npm: 11.6.2
+
+Versões instaladas principais:
+React: 19.2.8
+React DOM: 19.2.8
+React Router DOM: 7.18.2
+TypeScript: 6.0.3
+Vite: 8.2.1
+Firebase Web SDK: 12.17.1
+Firebase Tools: 15.26.0
+Vitest: 4.1.10
+vite-plugin-pwa: 1.3.0 (instalado, porém não configurado no vite.config.ts)
+
+Bibliotecas principais: React, React Router, Firebase Auth, Cloud Firestore,
+Firebase Storage, Vite, Vitest, Testing Library e Firebase Rules Unit Testing.
+
+====================================================================
+2. ESTRUTURA COMPLETA DE ARQUIVOS
+====================================================================
+
+Raiz:
+- package.json / package-lock.json: scripts e dependências.
+- vite.config.ts: Vite com base /SispDemandas/ e plugin React.
+- firebase.json: aponta regras e índices Firestore e regras Storage.
+- firestore.rules: autorização do banco.
+- storage.rules: autorização do Firebase Storage.
+- firestore.indexes.json: cinco índices compostos.
+- index.html: manifest e favicon, idioma html atualmente "en".
+- README.md: documentação de bootstrap e deploy; parcialmente desatualizado.
+- STATUS_ATUAL_SISPDEMANDAS.txt: status histórico; desatualizado em pontos
+  relevantes, inclusive resolução e exclusão lógica.
+
+src/
+- main.tsx: registra service worker manual e monta App.
+- App.tsx: HashRouter, rotas públicas/protegidas e AuthProvider.
+- index.css: estilos globais, temas, responsividade e telas; 1.074 linhas.
+- App.css: arquivo existente, mas não importado por main.tsx ou App.tsx.
+- components/Brand.tsx: logo com fallback textual SD.
+- components/AutoRefresh.tsx: verifica mudança do JS implantado a cada 60s.
+- features/auth/AuthContext.tsx: sessão Firebase e listener do perfil.
+- layouts/AppLayout.tsx: sidebar, cabeçalho, tema e logout.
+- lib/firebase.ts: inicialização Firebase e helper secondaryAuth.
+- pages/AuthPages.tsx: login, recuperação e tela de bloqueado.
+- pages/PublicRegistrationPage.tsx: cadastro público e bootstrap inicial.
+- pages/DashboardPage.tsx: dashboard único com variações por perfil.
+- pages/DemandsPages.tsx: lista, criação e detalhe; 769 linhas.
+- pages/AdminPages.tsx: usuários, nível/SLA informativo e auditoria
+  informativa; 368 linhas.
+- pages/CompaniesManagementPage.tsx: cadastro de empresas/CNPJ.
+- pages/ApprovalsPage.tsx: aprovações.
+- pages/StatusesPage.tsx: catálogo de status.
+- services/: users, demands, companies, statuses e audit.
+- types/models.ts: interfaces do banco.
+- utils/: datas, normalização e permissões.
+- tests/: apenas dois arquivos de teste.
+
+public/
+- manifest.webmanifest, sw.js e offline.html.
+- favicon.svg e icons.svg.
+- branding/.gitkeep.
+- IMPORTANTE: public/branding/logo.png NÃO existe fisicamente.
+
+.github/workflows/deploy-pages.yml:
+- instala Node 22;
+- npm ci;
+- lint;
+- test:run;
+- build;
+- publica dist como GitHub Pages.
+
+====================================================================
+3. ROTAS
+====================================================================
+
+#/login
+Tipo: pública
+Perfil: todos
+Componente: LoginPage
+Função: login Firebase Email/Senha.
+Status: IMPLEMENTADO.
+
+#/cadastro
+Tipo: pública
+Perfil: visitante; opções Cliente, Consultor e Administrador inicial
+Componente: PublicRegistrationPage
+Função: cadastro público e bootstrap inicial.
+Status: IMPLEMENTADO COM RISCO (consultor pode se vincular depois a empresas
+arbitrárias; ver segurança).
+
+#/recuperar-senha
+Tipo: pública
+Perfil: todos
+Componente: ForgotPasswordPage
+Função: envia reset Firebase.
+Status: IMPLEMENTADO.
+
+#/
+Tipo: protegida
+Perfil: usuário com perfil Firestore ativo
+Componente: DashboardPage
+Função: cards e demandas antigas.
+Status: IMPLEMENTADO COM RISCO (consultas sem limite/paginação).
+
+#/demandas
+Tipo: protegida
+Perfil: ativo
+Componente: DemandsPage
+Função: lista de demandas e busca textual.
+Status: IMPLEMENTADO COM RISCO.
+
+#/demandas/nova
+Tipo: protegida
+Perfil: requester ou consultant; admin recebe mensagem de acesso restrito.
+Componente: DemandFormPage
+Função: criar demanda.
+Status: IMPLEMENTADO COM RISCO (nível livre e permissões Firestore muito
+amplas para consultores).
+
+#/demandas/:id
+Tipo: protegida
+Perfil: controlado principalmente pelas Firestore Rules.
+Componente: DemandDetailPage
+Função: detalhe, status, observação, aceite, workflow e histórico.
+Status: IMPLEMENTADO COM RISCO.
+
+#/empresas
+Tipo: protegida
+Perfil: admin no componente e nas Rules.
+Componente: CompaniesManagementPage
+Função: criar empresa e consulta BrasilAPI.
+Status: PARCIALMENTE IMPLEMENTADO (sem edição/inativação na UI).
+
+#/usuarios
+Tipo: protegida
+Perfil: admin no componente e Rules.
+Componente: UsersPage
+Função: criar usuário interno, ativar/inativar e enviar reset.
+Status: IMPLEMENTADO COM RISCO.
+
+#/aprovacoes
+Tipo: protegida
+Perfil: admin.
+Componente: ApprovalsPage
+Função: aprovar/rejeitar cadastro pendente.
+Status: IMPLEMENTADO COM RISCO.
+
+#/status
+Tipo: protegida
+Perfil: admin.
+Componente: StatusesPage
+Função: inicializar e editar catálogo de status.
+Status: IMPLEMENTADO COM RISCO (edição por onBlur, sem validação).
+
+#/niveis
+Tipo: protegida
+Perfil: admin.
+Componente: LevelsPage
+Função: texto informativo.
+Status: NÃO IMPLEMENTADO como CRUD de nível/SLA.
+
+#/auditoria
+Tipo: protegida
+Perfil: admin.
+Componente: AuditPage
+Função: texto informativo.
+Status: NÃO IMPLEMENTADO como visualização de auditLogs.
+
+Rotas inexistentes relevantes: lixeira, kanban, anexos, notificações,
+perfil, configuração de permissões do consultor.
+
+Proteção: Protected só verifica sessão, existência de perfil e active no
+frontend. A autorização efetiva de dados depende das Rules. AdminPages,
+Approvals, Statuses e CompaniesManagement também verificam role na UI.
+
+Páginas exportadas sem rota usada: CompaniesPage em AdminPages.tsx.
+Links sem rota encontrada: nenhum confirmado.
+
+====================================================================
+4. AUTENTICAÇÃO
+====================================================================
+
+Firebase Authentication: IMPLEMENTADO via Email/Senha.
+Login: signInWithEmailAndPassword, mensagem genérica para falha.
+Logout: signOut via AuthContext.
+Recuperação de senha: sendPasswordResetEmail em LoginPage e UsersPage.
+Criação pública: createUserWithEmailAndPassword.
+Criação por admin: secondaryAuth cria conta com senha aleatória e envia reset.
+
+Controle de sessão:
+- onAuthStateChanged obtém User Firebase.
+- onSnapshot em users/{uid} obtém o perfil.
+- se perfil não existir, Protected redireciona ao login.
+- se profile.active for falso, mostra BlockedPage.
+- Rules usam profile.active == true; portanto inativação bloqueia operações
+  de banco mesmo que a sessão Firebase ainda esteja autenticada.
+
+Persistência: usa persistência padrão do Firebase Auth, não há configuração
+explícita de persistência.
+Tokens: não há token próprio nem gravação manual de token no localStorage.
+Tema, não token, é salvo em localStorage.theme.
+Senhas: não são armazenadas no Firestore/código. Senha pública transita pelo
+SDK Firebase. O admin interno gera senha aleatória no cliente da secondaryAuth.
+
+Riscos:
+- Não há tratamento de erro no listener do perfil Firestore; uma falha de
+  permissão/rede pode deixar loading ou perfil em estado pouco claro.
+- A conta inativa continua autenticada no Firebase até logout; Rules mitigam
+  dados, mas a UX não força signOut.
+- Não há MFA, rate limiting visível, captcha ou proteção adicional.
+
+====================================================================
+5. PERFIS E PERMISSÕES REAIS
+====================================================================
+
+ADMINISTRADOR
+Pode visualizar: users, companies, levels, status, demandas, notas internas,
+histórico e auditLogs pelas Rules.
+Pode criar: users, companies, níveis, status, configurações e aprovar.
+Não pode criar demanda pelas Rules atuais.
+Pode editar demanda: NÃO IMPLEMENTADO; Rules bloqueiam update de demanda.
+Pode excluir demanda: NÃO IMPLEMENTADO; delete físico bloqueado e lixeira foi
+removida.
+Pode aprovar/rejeitar: IMPLEMENTADO.
+Pode alterar status: NÃO IMPLEMENTADO na UI e bloqueado ao atualizar demanda.
+Pode visualizar empresas/usuários/auditoria: leitura permitida; auditoria não
+tem listagem de interface.
+Pode visualizar notas internas: Rules permitem leitura; não há UI de notas.
+Problema: usuário interno admin é criado pela UI, mas não há proteção contra
+o administrador criar outros admins; isso é uma decisão de governança, não
+uma falha técnica isolada.
+
+CONSULTOR
+Pode visualizar: demandas de qualquer empresa em companyIds, não somente as
+atribuídas ou sem responsável.
+Pode criar: demandas para empresas em companyIds pela Rule.
+Pode assumir: demanda sem consultantId de empresa em companyIds.
+Pode mudar status, editar observação e configurar workflow: IMPLEMENTADO na
+UI, porém Rules permitem modificações muito mais amplas que a UI.
+Pode vincular empresa: IMPLEMENTADO, inclusive várias; IMPLEMENTADO COM RISCO
+CRÍTICO, pois o próprio consultor pode incluir qualquer empresa ativa.
+Pode criar nota pública/interna pelas Rules; não há interface de notas.
+Permissões individuais: estrutura existe, mas não é aplicada.
+
+CLIENTE / REQUESTER
+Pode visualizar: demandas da própria companyId, histórico e notas públicas.
+Pode criar demanda: IMPLEMENTADO.
+Pode criar nota pública: Rule permite; interface não existe.
+Não pode ler nota interna.
+Pode editar demanda: IMPLEMENTADO COM RISCO; Rule de update não restringe
+adequadamente os campos que podem ser alterados.
+Não pode alterar statusId nem consultantId pela Rule, mas pode alterar
+outros campos importantes, inclusive status legado/statusName/statusColor.
+
+====================================================================
+6. CADASTRO PÚBLICO
+====================================================================
+
+Cliente: SIM. Campos nome, e-mail, empresa ativa obrigatória, setor padrão
+opcional, telefone opcional, senha e confirmação. Cria user inactive/pending.
+Consultor: SIM. Campos nome, e-mail, telefone, senha e confirmação. Não há
+seleção de empresa no formulário; companyIds e requestedCompanyIds nascem
+vazios. Cria inactive/pending.
+Administrador inicial: SIM, somente se publicConfig/bootstrap contém
+initialized:false. Mostra opção apenas nessa condição.
+
+Para requester/consultant:
+- active:false.
+- registrationStatus:"pending".
+- após criação é feito signOut.
+- aprovação é necessária para acesso.
+
+Proteção de criação pública:
+- Rules exigem uid igual ao usuário autenticado.
+- e-mail normalizado deve coincidir com request.auth.token.email.
+- requester deve usar companyId de empresa ativa existente.
+- consultant só precisa enviar companyIds como lista; lista vazia é válida.
+
+Status: Cliente IMPLEMENTADO; Consultor IMPLEMENTADO COM RISCO (sem empresas
+solicitadas); Administrador inicial IMPLEMENTADO COM RISCO operacional, pois
+exige bootstrap manual prévio.
+
+====================================================================
+7. PRIMEIRO ADMINISTRADOR
+====================================================================
+
+Existe bootstrap inicial: IMPLEMENTADO.
+Processo:
+1. operador cria bootstrapConfig/owner com emailNormalized e initialized:false;
+2. operador cria publicConfig/bootstrap com initialized:false;
+3. visitante autenticado com aquele e-mail usa cadastro Admin;
+4. transação cria users/{uid} admin ativo/aprovado e atualiza ambos documentos.
+
+Trava posterior: IMPLEMENTADO. owner.initialized e publicConfig.bootstrap
+initialized são exigidos como false antes da criação e alterados na transação.
+
+Risco de qualquer pessoa virar admin: baixo no desenho das Rules, desde que
+o documento owner seja criado corretamente e o e-mail seja controlado. A
+regra usa request.auth.token.email e emailNormalized configurado.
+
+Onde: frontend PublicRegistrationPage, Firestore Rules ownerCandidate e
+documentos Firestore. Não é automático; depende de configuração manual.
+
+====================================================================
+8. MODELO DE USUÁRIO (UserProfile)
+====================================================================
+
+Campos tipados:
+uid obrigatório; name obrigatório; email obrigatório; emailNormalized
+obrigatório; role obrigatório; companyId obrigatório no tipo (nullable);
+companyName opcional; companyIds opcional; requestedCompanyIds opcional;
+permissions opcional; defaultSector opcional; phone opcional; active
+obrigatório; registrationStatus opcional; rejectionReason opcional;
+createdAt/updatedAt opcionais.
+
+Campos previstos no pedido, mas ausentes no tipo/código: approvedAt,
+approvedBy, rejectedAt, rejectedBy.
+
+Usados efetivamente:
+- uid, name, email, role, companyId, companyName, companyIds, active,
+  registrationStatus e defaultSector.
+- requestedCompanyIds é lido para aprovação, mas cadastro público de
+  consultor grava [].
+- phone é gravado, não exibido em UsersPage.
+- permissions é tipado e updateConsultantAccess existe, porém não há UI e
+  quase nenhuma checagem efetiva.
+
+Definidos porém não utilizados de forma operacional:
+canCreateDemand, canEditDemand, canManageInternalNotes,
+canManageAttachments, canDeleteDemand. canChangeStatus possui helper, mas o
+helper não é usado no fluxo de status.
+
+Risco: permissões dão falsa impressão de controle granular; as Rules não as
+avaliam e a UI não as administra.
+
+====================================================================
+9. APROVAÇÃO DE CADASTROS
+====================================================================
+
+Central: IMPLEMENTADO em #/aprovacoes.
+Consulta users com registrationStatus == pending.
+Cliente: aprova active:true e registrationStatus approved.
+Consultor: aprova também companyIds usando requestedCompanyIds; como o
+cadastro público não preenche requestedCompanyIds, normalmente aprova [].
+Rejeição: IMPLEMENTADO, solicita motivo por window.prompt e grava
+rejectionReason, active:false e rejected.
+Histórico/auditoria: audit de approve/reject é gravado.
+Notificação: documento notifications é criado na aprovação.
+
+PARCIALMENTE IMPLEMENTADO:
+- não há tela para ler notifications;
+- não há configuração de empresas/permissões no fluxo de aprovação;
+- não grava approvedAt/approvedBy/rejectedAt/rejectedBy;
+- não há confirmação nem tratamento detalhado de erro por ação.
+
+====================================================================
+10. CONSULTOR X EMPRESA
+====================================================================
+
+Modelo: companyIds:string[] no usuário. Não há coleção intermediária.
+companyId existe no perfil para requester; consultant usa companyIds.
+
+Comportamento atual real:
+- Rules consultantCompany(companyId) verifica se demand.companyId está em
+  profile().companyIds.
+- leitura de demanda para consultor é permitida para TODAS as demandas das
+  empresas listadas, inclusive demandas atribuídas a outro consultor.
+- update usa assignedOrAvailable(resource.data): permite se a demanda é do
+  consultor atual OU está sem consultor.
+
+Um consultor pode ver empresa não autorizada?
+IMPLEMENTADO COM RISCO CRÍTICO: a regra consultantOwnCompanyLink permite que
+o consultor atualize a própria lista companyIds sem validar empresa, aprovação
+ou vínculo. A UI Dashboard exibe todas as empresas ativas para “Vincular
+empresa”. Após isso, consultantCompany torna a empresa “autorizada”.
+
+Regra responsável e interpretação:
+consultantOwnCompanyLink só restringe os campos modificados a companyIds e
+updatedAt; não restringe quais IDs entram na lista.
+consultantCompany confia integralmente nessa lista. Portanto o isolamento
+multiempresa é quebrado por auto-vinculação.
+
+====================================================================
+11. PERMISSÕES DO CONSULTOR
+====================================================================
+
+takeUnassignedDemand: IMPLEMENTADO por acceptDemand + Rule assignedOrAvailable.
+createDemand: IMPLEMENTADO COM RISCO; Rule permite para qualquer companyIds.
+editDemand: IMPLEMENTADO COM RISCO; Rule permite update amplo em demanda
+atribuída ou não atribuída.
+changeStatus: IMPLEMENTADO, sem aplicação de permissions.canChangeStatus.
+assignConsultant: PARCIAL; aceitar a si mesmo existe, reatribuir não existe.
+reassignDemand: NÃO IMPLEMENTADO.
+addPublicNote: serviço/Rule IMPLEMENTADOS; UI NÃO IMPLEMENTADA.
+addInternalNote: serviço/Rule IMPLEMENTADOS; UI NÃO IMPLEMENTADA.
+deleteDemand: NÃO IMPLEMENTADO após remoção da lixeira.
+viewDeletedDemands/restoreDemand: NÃO IMPLEMENTADO.
+reopenDemand: IMPLEMENTADO somente para Cancelada -> Em análise.
+exportDemands: NÃO IMPLEMENTADO.
+
+Estrutura ConsultantPermissions: PARCIALMENTE IMPLEMENTADA; model e função
+updateConsultantAccess existem, mas não há administração nem enforcement.
+
+====================================================================
+12. EMPRESAS
+====================================================================
+
+Modelo Company:
+legalName, legalNameNormalized, tradeName, cnpj, phone, email, contactName,
+notes, active e address {zipCode, street, number, complement, neighborhood,
+city, state}.
+
+Inscrição estadual: NÃO IMPLEMENTADO.
+Ativa/inativa: campo existe; toggleCompany existe, mas não há botão/UI de
+inativação.
+Edição: saveCompany aceita id, mas a tela não oferece edição de empresa.
+
+Duplicidade: IMPLEMENTADO COM RISCO.
+saveCompany usa runTransaction e uniqueCompanyKeys para nome normalizado e
+CNPJ normalizado. Todas leituras da transação precedem escritas, evitando o
+erro clássico de Firestore “todas as leituras antes das gravações”.
+
+Riscos de uniqueCompanyKeys:
+- ao editar nome/CNPJ, chaves antigas não são removidas;
+- não há UI de edição, mas o serviço suporta id e ficaria inconsistente;
+- CNPJ vazio não tem chave única;
+- não existe validação de dígito de CNPJ;
+- inativação preserva documento, bom para histórico, mas não há UI.
+
+====================================================================
+13. CNPJ
+====================================================================
+
+Consulta CNPJ: IMPLEMENTADO.
+Serviço: lookupCompanyByCnpj chama BrasilAPI
+https://brasilapi.com.br/api/cnpj/v1/{cnpj}.
+Interface: botão “Preencher pelo CNPJ” e consulta também no onBlur do CNPJ.
+Campos preenchidos: razão social, fantasia, telefone, e-mail e endereço.
+
+Riscos:
+- API externa chamada diretamente pelo navegador, sujeita a CORS,
+  disponibilidade, rate limit e exposição de padrão de uso.
+- onBlur consulta mesmo quando o campo pode estar incompleto/vazio.
+- não há inscrição estadual na interface/modelo.
+
+====================================================================
+14. DEMANDAS — MODELO REAL
+====================================================================
+
+Campos existentes no tipo/modelo e criação:
+id, code, sequence, year, title, description, companyId, companyName,
+requesterId, requesterName, requesterSector, screenName,
+screenNameNormalized, formName, formNameNormalized, levelId, levelName,
+priority, status, statusId, statusName, statusColor, statusUpdatedAt,
+statusHistoryId, workflowStatusIds, consultantId, consultantName,
+executionApprovedAt, executionApprovedBy, startedAt, pausedAt, pauseReason,
+completedAt, completedBy, cancelledAt, createdAt, updatedAt, lastActivityAt.
+
+Salvos na criação: a maior parte acima, exceto workflowStatusIds, datas de
+execução/pausa/conclusão/cancelamento e vários campos opcionais.
+
+Lidos/exibidos no detalhe: code, title, companyName, consultantName,
+requesterSector, status, description, histórico e observações.
+Não exibidos no detalhe atual: prioridade, solicitante, tela, formulário,
+nível, datas, SLA, anexos, notas e vários campos de execução.
+
+Campos do pedido ausentes: requestingSector (o nome real é requesterSector),
+approvedAt, approvedBy, resolutionSummary, isDeleted, deletedByName.
+Campos de exclusão lógica foram removidos do TypeScript/serviço, porém
+documentos legados podem ainda possuir deletedAt/deletedBy/deleteReason.
+
+Risco: o modelo é amplo, mas a tela e regras não preservam invariantes de
+todos os campos. Demandas são atualizadas por objetos patch sem schema.
+
+====================================================================
+15. CRIAÇÃO DE DEMANDA
+====================================================================
+
+Requester: IMPLEMENTADO. companyId/companyName vêm do perfil no serviço.
+Consultor: IMPLEMENTADO; formulário pede Empresa (ID) e Nome da empresa como
+inputs livres. A Rule só verifica companyId em companyIds; companyName pode
+não corresponder ao documento da empresa.
+Admin: bloqueado pela interface e pela Rule de create.
+
+Status inicial: primeira demandaStatus cuja legacyKeys contém analysis,
+fallback primeiro status ativo.
+Código sequencial: IMPLEMENTADO com runTransaction em counters/demands,
+reduzindo colisão concorrente.
+Risco crítico: Rules permitem qualquer usuário ativo escrever counters;
+alguém pode manipular sequence e causar códigos incoerentes/colisões.
+
+Nível: input livre, não select; collection levels não é usada.
+Setor solicitante: existe e é gravado.
+Anexo: NÃO IMPLEMENTADO.
+
+====================================================================
+16. STATUS
+====================================================================
+
+Catálogo: collection demandStatuses dinâmica.
+Campos: name, description, color, order, active, isFinal, legacyKeys.
+CRUD: PARCIAL. A página edita campos existentes por onBlur, inicializa
+defaults, mas não cria/remova status explicitamente e não valida duplicidade.
+isInitial/isPaused: NÃO IMPLEMENTADO.
+Ativo/inativo: IMPLEMENTADO pelo checkbox.
+
+Defaults no código:
+Em análise; Aguardando informações; Em execução; Em teste; Aguardando
+validação; Pausada; Concluída; Cancelada.
+
+Hardcodes encontrados:
+- legacyKeys e nomes nas funções defaultStatuses/legacyName;
+- fluxo padrão de workflow: analysis, development, waiting_validation,
+  completed;
+- cancelamento/reabertura procura legacyKeys cancelled/analysis;
+- criação exige request.resource.data.status == 'analysis';
+- dashboard usa strings completed/cancelled/waiting_information.
+
+====================================================================
+17. FLUXO DE STATUS
+====================================================================
+
+Fluxo atual:
+- consultor assume demanda não atribuída;
+- recebe workflow padrão, configurável por demanda;
+- salva uma observação por status;
+- muda status e grava history;
+- cancelar é botão separado;
+- Cancelada é clicável para confirmar reabertura em Em análise.
+
+Aprovação de execução/programação/fila: NÃO IMPLEMENTADO.
+Transições obrigatórias: NÃO IMPLEMENTADO. Consultor pode pular entre os
+status selecionados no workflow.
+Validação de transição: só bloqueia a seleção do status atual na UI; não há
+máquina de estados nas Rules/serviços.
+Conclusão: seta completedAt/completedBy quando nome contém “conclu”.
+Cancelamento: seta cancelledAt; reabertura limpa cancelledAt.
+Histórico: IMPLEMENTADO para criação/status/aceite; não para todas as
+mudanças possíveis.
+Auditoria: create/status/accept/workflow são auditados.
+
+Risco: Rule de update permite ao consultor autorizado alterar campos
+arbitrários da demanda, não somente transições previstas.
+
+====================================================================
+18. NÍVEIS E SLA
+====================================================================
+
+collection levels: Rule existe; não há serviço, modelo específico ou CRUD.
+Tela #/niveis: apenas informativa.
+No cadastro: nível é input livre obrigatório.
+Utilitários businessDays e slaState existem e possuem teste unitário.
+Cálculo real de SLA, exibição, prazo, vencimento ou alerta: NÃO IMPLEMENTADO.
+
+====================================================================
+19. PRIORIDADE
+====================================================================
+
+Valores: low, normal, high, urgent.
+No formulário de demanda: select disponível para requester/consultor.
+No detalhe/lista/dashboard: não aparece.
+Alteração posterior: NÃO IMPLEMENTADO na UI.
+Cor visual/filtro: NÃO IMPLEMENTADO para prioridade, embora classes p-* existam.
+Risco: requester escolhe “urgent” sem política/validação.
+
+====================================================================
+20. DETALHE DA DEMANDA
+====================================================================
+
+Exibe: ID/código, título, empresa, consultor, setor, status, descrição
+clicável com modal, controles de consultor, workflow, observação, relatório
+de status recolhível.
+
+Não exibe: prioridade, solicitante, telefone, tela, formulário, nível, datas,
+SLA, notas públicas, notas internas, anexos e contadores.
+
+Ações:
+- consultor: assumir, salvar/editar observação, mudar status, cancelar,
+  reabrir cancelada, configurar workflow.
+- admin: leitura; nenhuma ação de demanda.
+- requester: leitura do resumo/histórico.
+
+Finalizar: selecionando Concluída, sem resumo de resolução.
+Excluir/restaurar: NÃO IMPLEMENTADO.
+
+====================================================================
+21. OBSERVAÇÕES E NOTAS
+====================================================================
+
+Observações de status: IMPLEMENTADO em demands/{id}/history, campo
+observation. Editáveis pelo consultor autorizado.
+
+publicNotes/internalNotes:
+- serviço addNote existe;
+- Rules para criar/ler existem;
+- interface de criação, leitura, diferenciação visual, edição, exclusão e
+  anexos: NÃO IMPLEMENTADA.
+
+Cliente pode ler publicNotes pela Rule e criar publicNotes pela Rule, porém
+não há UI.
+Cliente não pode ler/criar internalNotes.
+Consultor pode criar ambas para empresa vinculada.
+Admin lê ambas, mas não cria.
+
+====================================================================
+22. HISTÓRICO
+====================================================================
+
+Caminho: demands/{id}/history.
+Campos observados: type, statusId, statusName, observation, authorId,
+authorName, createdAt; para assignment também consultantId/consultantName.
+Edição adiciona edited, updatedAt, updatedBy, updatedByName.
+
+Registra: criação/status inicial, mudança de status, aceite de consultor.
+Não registra de forma estruturada: prioridade, título/descrição, empresa,
+solicitante, cancelamento como tipo próprio, conclusão como tipo próprio,
+reatribuição, notas, exclusão/restauração.
+
+Suficiência para auditoria humana: PARCIALMENTE IMPLEMENTADO. O relatório
+agrupa por status e oculta repetidos, o que melhora leitura, mas perde uma
+timeline completa no resumo e não há trilha de todas as mudanças.
+
+====================================================================
+23. AUDITORIA
+====================================================================
+
+Serviço audit(): IMPLEMENTADO. Grava auditLogs com action, entityType,
+entityId, companyId, before, after, userId, userName, userRole, createdAt.
+Quem grava: serviços users/demands.
+Quem lê: somente admin pelas Rules.
+Tela: NÃO IMPLEMENTADA; AuditPage é placeholder textual.
+Filtros/listagem: NÃO IMPLEMENTADOS.
+
+Ações confirmadas: create user/demand, approve, reject, update_access,
+activate/deactivate, status, accept e workflow_statuses.
+Ausências: edição de observação, cadastro de empresa, alteração de status
+catálogo, notas e várias mudanças de demanda.
+
+====================================================================
+24. ANEXOS
+====================================================================
+
+Firebase Storage: configuração e Rules IMPLEMENTADAS.
+Upload real, interface, download, metadata Firestore, vínculo visual com
+demanda/observação, delete: NÃO IMPLEMENTADOS.
+
+Rules permitem caminho demands/{demandId}/{fileName}, leitura para usuário
+ativo com acesso à demanda e criação com MIME/tamanho/nome validados.
+MIME aceito inclui PDF, Office, Excel, JSON, CSV, texto, PNG/JPEG/WebP.
+Limite: menor que 10 MiB.
+
+Risco: regra de acesso de consultor depende de companyIds autoeditável;
+portanto o risco de acesso cruzado se propaga ao Storage.
+
+====================================================================
+25. EXCLUSÃO E LIXEIRA
+====================================================================
+
+deleteDoc em demandas: NÃO encontrado.
+Rota #/lixeira: NÃO IMPLEMENTADA.
+Restauração: NÃO IMPLEMENTADA.
+Serviços softDelete/restore: removidos.
+Cancelamento: IMPLEMENTADO como alternativa operacional.
+
+Documentos legados podem manter deletedAt/deletedBy/deleteReason. A Rule
+preservesTrashFields impede alterações desses campos, mas não os remove.
+DemandsPage não filtra mais deletedAt, portanto documentos legados voltam a
+aparecer na listagem.
+
+====================================================================
+26. KANBAN
+====================================================================
+
+Modo Kanban: NÃO IMPLEMENTADO.
+Drag-and-drop: NÃO IMPLEMENTADO.
+Toggle tabela/Kanban: NÃO IMPLEMENTADO.
+
+====================================================================
+27. LISTAGEM DE DEMANDAS
+====================================================================
+
+Tabela: Código, Empresa, Título, Status, Dias.
+Busca: filtro textual em memória por code/title/companyName.
+Filtros por empresa/cliente/setor/consultor/tela/form/nível/status/prioridade/
+período/atrasadas/sem consultor/minhas: NÃO IMPLEMENTADOS.
+
+Paginação, limit, startAfter: NÃO IMPLEMENTADOS.
+Dados: onSnapshot permanente.
+Admin carrega todas as demandas ordenadas por createdAt; requester e
+consultor consultam por companyId + createdAt.
+
+Risco de performance: alto para crescimento. Todos os documentos resultantes
+são mantidos em memória, e dashboard também abre listener separado.
+
+====================================================================
+28. DASHBOARD ADMIN
+====================================================================
+
+Dashboard compartilhado. Admin consulta a coleção inteira demands sem ordem,
+limite ou paginação.
+Cards reais:
+- Demandas abertas.
+- Aguardando informações.
+- Sem consultor.
+- Concluídas.
+Lista real: cinco “Demandas mais antigas” abertas.
+
+Não há: SLA, pendências de aprovação, por empresa, por consultor, gráficos,
+atividade recente ou alertas.
+
+====================================================================
+29. DASHBOARD CONSULTOR
+====================================================================
+
+Dashboard compartilhado com seletor de empresa.
+Consultor vê empresas em companyIds, pode selecionar uma e o dashboard
+consulta demandas daquela empresa. Pode também “Vincular outra empresa”,
+inclusive qualquer empresa ativa.
+
+Cards e lista são iguais ao admin/requester, filtrados pela empresa escolhida.
+Não há dashboard de minhas demandas separado, fila, produtividade ou SLA.
+Status: IMPLEMENTADO COM RISCO CRÍTICO pelo auto-vínculo.
+
+====================================================================
+30. DASHBOARD CLIENTE
+====================================================================
+
+Dashboard compartilhado. Consulta demandas com companyId igual ao profile.
+Cards e lista iguais aos demais perfis.
+Não há indicadores específicos de solicitante, notificações ou SLA.
+
+====================================================================
+31. NOTIFICAÇÕES
+====================================================================
+
+Collection notifications: IMPLEMENTADA.
+Criação: aprovação grava notificação.
+Rules: admin lê todas; usuário ativo lê/atualiza a própria.
+Sino, contador, lista, marcar como lida na UI, eventos além de aprovação:
+ NÃO IMPLEMENTADOS.
+
+====================================================================
+32. MATRIZ DAS FIRESTORE RULES
+====================================================================
+
+Legenda: S=sim, N=não, C=condicional.
+
+users
+                 READ CREATE UPDATE DELETE
+Admin            S    S      S      N
+Consultant       próprio C    próprio C (companyIds/updatedAt) N
+Requester        próprio C    N      N
+Não autenticado  N    N      N      N
+
+companies
+                 READ CREATE UPDATE DELETE
+Admin            S    S      S      N
+Consultant       S    N      N      N
+Requester        S    N      N      N
+Não autenticado  ativa get C / list N  N N N
+
+uniqueCompanyKeys
+                 READ CREATE UPDATE DELETE
+Admin            S    S      S      S
+Demais           N    N      N      N
+
+levels, demandStatuses, settings
+Admin: leitura/escrita; demais ativos leem levels/status/settings; delete
+também permitido a admin porque “allow write” engloba delete.
+Risco: levels/status/settings não têm validação de schema nem proteção contra
+remoção acidental pelo admin.
+
+counters
+                 READ CREATE UPDATE DELETE
+Qualquer ativo   S    S      S      S
+Risco CRÍTICO: qualquer ativo pode manipular sequência de demandas.
+
+demands
+                 READ CREATE UPDATE DELETE
+Admin            S    N      N      N
+Consultant       S empresa em companyIds; C; C atrib./sem consultor; N
+Requester        S própria empresa; C própria empresa; C amplo; N
+Não autenticado  N    N      N      N
+
+Demandas — brechas:
+1. consultant pode auto-adicionar companyIds.
+2. consultant autorizado pode update amplo da demanda atribuída/sem consultor,
+   pois a Rule só olha resource.data, não os campos request.resource.
+3. requester pode update amplo, preservando só companyId, consultantId e
+   statusId; pode alterar title, descrição, prioridade, status legado,
+   statusName/statusColor, código e outros campos.
+4. create de consultant não valida companyName nem schema.
+
+publicNotes
+Admin lê; consultant/requester da empresa lê/cria; ninguém atualiza/deleta.
+internalNotes
+Admin lê; consultant da empresa lê/cria; requester não acessa.
+history
+Admin lê; consultant da empresa e requester da empresa leem; consultant cria;
+consultant que gerencia a demanda pode editar somente campos de observação.
+auditLogs
+Admin lê; qualquer ativo cria; update/delete N.
+Risco: qualquer ativo pode inserir auditLog arbitrário, pois não há vínculo
+entre userId gravado e request.auth.uid nas Rules.
+notifications
+Admin lê/cria; usuário lê/atualiza a própria; delete N.
+bootstrap/publicConfig
+Regras específicas de bootstrap; leitura pública apenas de publicConfig.
+
+====================================================================
+33. STORAGE RULES
+====================================================================
+
+Autenticação/ativo: IMPLEMENTADO.
+Admin: lê arquivos de qualquer demanda.
+Requester: lê/cria arquivo da própria empresa.
+Consultant: lê/cria arquivo de qualquer empresa em companyIds.
+MIME/tamanho/nome: IMPLEMENTADOS.
+Update/delete: bloqueados.
+Notas internas/caminho por nota: NÃO IMPLEMENTADO.
+
+Risco: canAccessDemand usa companyIds, que consultor pode alterar sozinho.
+Risco: não há metadados Firestore nem interface; arquivos órfãos e ausência
+de listagem/download são prováveis se upload for implementado.
+
+====================================================================
+34. ÍNDICES FIRESTORE
+====================================================================
+
+Índices presentes:
+1. demands: companyId ASC, createdAt DESC.
+2. demands: consultantId ASC, status ASC, createdAt DESC.
+3. demands: companyId ASC, statusId ASC, createdAt DESC.
+4. demands: deletedAt ASC, updatedAt DESC.
+5. users: registrationStatus ASC, role ASC, createdAt DESC.
+
+Consultas reais que usam índice:
+- companyId + createdAt em DemandsPage: índice 1 atende.
+- companyId sem order em Dashboard: índice simples automático.
+- users registrationStatus sem role/order no Firestore (ordenação em memória):
+  índice 5 não é necessário para essa consulta.
+
+Índices sem uso atual confirmado: consultantId/status/createdAt;
+companyId/statusId/createdAt; deletedAt/updatedAt; users com role/createdAt.
+O índice deletedAt tornou-se obsoleto após remoção da lixeira.
+
+====================================================================
+35. BANCO DE DADOS
+====================================================================
+
+users: perfis/autorização. Gravam bootstrap, admin, aprovador e consultor
+auto-vínculo. Risco alto de companyIds sem validação.
+companies: dados empresariais. Admin grava; ativos leem. uniqueCompanyKeys
+depende dela.
+uniqueCompanyKeys: unicidade por nome/CNPJ. Admin escreve.
+demands: tickets/demandas. Alta dependência de users, companies, statuses e
+counters. Riscos críticos de Rule.
+counters: sequência. Risco crítico de escrita ampla.
+demandStatuses: catálogo. Admin escreve.
+levels: esperado para SLA, mas sem uso funcional.
+auditLogs: auditoria. Qualquer ativo grava; sem tela.
+notifications: criada em aprovação; sem UI.
+bootstrapConfig/owner e publicConfig/bootstrap: bootstrap inicial.
+Subcoleções demands/{id}/history, publicNotes, internalNotes.
+
+====================================================================
+36. PWA
+====================================================================
+
+Manifest: IMPLEMENTADO, start_url correto para HashRouter e base.
+Instalação: PARCIALMENTE IMPLEMENTADA. Há manifest e SW manual, mas não há
+configuração vite-plugin-pwa, ícones PNG adequados, nem verificação de
+criterios reais de instalação.
+Service worker: cacheia apenas raiz e offline.html no install; fetch é
+network-first e não armazena assets JS/CSS.
+Offline real: PARCIALMENTE IMPLEMENTADO; sem cache de bundles, a aplicação
+não é garantidamente utilizável offline depois do primeiro carregamento.
+Atualização: AutoRefresh consulta o HTML a cada 60s/foco/visibilidade e
+recarrega se script mudou. SW não usa skipWaiting nem versionamento do cache
+além de sisp-static-v1.
+Risco: duplicidade conceitual entre SW manual e AutoRefresh; sem estratégia
+formal de atualização/cache.
+
+====================================================================
+37. GITHUB PAGES
+====================================================================
+
+Vite base: /SispDemandas/ — coerente.
+Router: HashRouter — coerente para Pages.
+Workflow: npm ci, lint, testes, build, artifact e deploy — IMPLEMENTADO.
+Node do CI: 22; Node local analisado: 25.1.0, diferença que pode ocultar
+incompatibilidades.
+Deploy: push em main e workflow_dispatch.
+Status do deployment atual: NÃO VERIFICADO externamente.
+
+====================================================================
+38. RESPONSIVIDADE
+====================================================================
+
+CSS possui breakpoints em 800px e 520px, sidebar móvel, toolbar flexível,
+grades de cards e detalhe de demanda ajustável.
+Tabelas usam .table-wrap com overflow, evitando quebra total, mas exigem
+rolagem horizontal em mobile.
+Formulários grandes têm grid para uma coluna em mobile.
+Modal de descrição tem largura máxima e altura com overflow.
+
+Riscos: telas admin e tabela de demandas continuam densas em mobile; ausência
+de teste visual; App.css não utilizado aumenta incerteza de estilos mortos.
+Status: PARCIALMENTE IMPLEMENTADO.
+
+====================================================================
+39. TEMA
+====================================================================
+
+Tema claro/escuro: IMPLEMENTADO com CSS variables e data-theme.
+Escolha: localStorage.theme, fallback prefers-color-scheme.
+Troca: botão no AppLayout.
+Contraste: não validado por ferramenta; visual usa azul, fundo grafite e
+variáveis consistentes em index.css.
+Inconsistência: App.css existe mas não é importado.
+
+====================================================================
+40. LOGO
+====================================================================
+
+public/branding/logo.png: NÃO existe.
+Uso: Brand.tsx tenta carregar esse caminho.
+Fallback: IMPLEMENTADO, mostra “SD”.
+object-fit: CSS deve ser revisado, mas Brand utiliza imagem com fallback.
+Risco: em produção a marca visual será o fallback, não a logo solicitada.
+
+====================================================================
+41. EXPERIÊNCIA DO USUÁRIO
+====================================================================
+
+Login: 7/10. Claro, links de reset/cadastro; erro genérico e sem feedback de
+perfil inativo até após login.
+Cadastro: 6/10. Visual guiado; consultor não seleciona empresas e bootstrap
+manual é pouco autoexplicado.
+Dashboard: 6/10. Cards/lista básicos; sem filtros, SLA, alertas ou paginação.
+Demandas: 6/10. Lista e busca simples; campos e permissões incoerentes.
+Detalhe: 7/10. Resumo, modal, observações e relatório; ausência de dados
+centrais como prioridade/SLA/notas/anexos.
+Administração: 5/10. Usuários e empresas básicos; níveis/auditoria são
+placeholders e empresa não edita/inativa.
+Mobile: 6/10. Breakpoints existentes, porém tabelas rolam e não há QA.
+Visual geral: 7/10. Sistema consistente e moderno, mas a logo está ausente.
+
+Feedback: há mensagens inline, confirm e prompt; não há toast padronizado,
+skeleton, tratamento uniforme de listeners, nem loading de listas.
+Acessibilidade: labels presentes em vários inputs; faltam foco inicial/ESC no
+modal, navegação mais completa por teclado e auditoria ARIA.
+
+====================================================================
+42. QUALIDADE DO CÓDIGO
+====================================================================
+
+Nota: 5/10.
+
+Pontos positivos: TypeScript, serviços separados, transações de código e
+empresa, tipos básicos, testes de utilitários, configurações simples.
+
+Problemas: DemandsPages.tsx muito grande (769 linhas); vários arquivos
+compactados em uma linha; lógica de autorização duplicada/inconsistente;
+permissões tipadas mas inativas; erro/loader irregulares; App.css morto;
+documentação desatualizada; ausência de componentes reutilizáveis para
+formulários/listas/modais.
+
+====================================================================
+43. PERFORMANCE
+====================================================================
+
+Nota: 4/10.
+
+Uso intenso de onSnapshot em collection inteira, sem limit/paginação:
+dashboard admin, usuários, empresas, aprovações, demandas e status.
+Filtros de demanda e usuários são em memória.
+Não há startAfter/limit/contagem agregada.
+Dashboard e lista podem manter listeners simultâneos.
+Bundle build: JS ~850 KB não comprimido, ~253 KB gzip; Vite alerta chunk
+acima de 500 KB.
+
+====================================================================
+44. SEGURANÇA
+====================================================================
+
+Nota: 3/10.
+
+VULNERABILIDADES CRÍTICAS
+1. Auto-vínculo de empresa por consultor permite acesso a dados e Storage de
+qualquer empresa ativa.
+2. Qualquer usuário ativo pode criar/alterar/remover counters, manipulando
+sequência de demandas.
+3. Requester pode atualizar muitos campos sensíveis de demanda, inclusive
+status legado/metadados/código, pois Rules só preservam três campos.
+
+ALTA PRIORIDADE
+4. Consultor autorizado pode update amplo de demanda atribuída ou disponível,
+incluindo campos de empresa/solicitante/código.
+5. Qualquer ativo pode forjar auditLogs com userId/role arbitrários.
+6. Permissions de consultor não são aplicadas, contrariando o modelo.
+7. Consulta e vínculo de consultor não passam por aprovação real.
+
+MÉDIA PRIORIDADE
+8. Storage não tem interface/metadata e herda risco de companyIds.
+9. Bootstrap depende de preparação manual correta.
+10. Documentação descreve funcionalidades removidas, criando risco operacional.
+
+BAIXA PRIORIDADE
+11. Config Firebase pública é normal para aplicações web Firebase; a proteção
+deve estar nas Rules, onde há os riscos acima.
+
+====================================================================
+45. TESTES EXECUTADOS
+====================================================================
+
+COMANDO: npm run lint
+RESULTADO: sucesso (exit code 0).
+TEMPO: 4,92 s.
+WARNINGS/ERROS: nenhum registrado.
+
+COMANDO: npm run test:run
+RESULTADO: sucesso; 2 arquivos, 10 testes aprovados.
+TEMPO: 2,44 s.
+WARNINGS/ERROS: nenhum registrado.
+
+COMANDO: npm run test:rules
+RESULTADO: sucesso (exit code 0).
+TEMPO: 2,42 s.
+WARNINGS/ERROS: nenhum registrado.
+Observação: este teste apenas busca textos em firestore.rules; não executa
+cenários de autorização no emulador.
+
+COMANDO: npm run build
+RESULTADO: sucesso.
+TEMPO: 6,14 s.
+WARNING: chunk JavaScript acima de 500 KB após minificação.
+
+Cobertura: baixa. Existem src/tests/utils.test.ts e
+src/tests/firestore.rules.test.ts. Não há testes de componentes, serviços de
+demanda, autenticação, regras reais em emulador, integração ou E2E.
+
+====================================================================
+46. COBERTURA FUNCIONAL
+====================================================================
+
+Login                                  IMPLEMENTADO
+Cadastro cliente                       IMPLEMENTADO
+Cadastro consultor                     PARCIALMENTE IMPLEMENTADO
+Primeiro admin                         IMPLEMENTADO COM RISCO
+Aprovação cliente                      IMPLEMENTADO
+Aprovação consultor                    PARCIALMENTE IMPLEMENTADO
+Vínculo consultor empresa              IMPLEMENTADO COM RISCO
+Permissões consultor                   PARCIALMENTE IMPLEMENTADO
+Empresas                               PARCIALMENTE IMPLEMENTADO
+Consulta CNPJ                          IMPLEMENTADO COM RISCO
+Demandas                               IMPLEMENTADO COM RISCO
+Setor solicitante                      IMPLEMENTADO
+Status dinâmico                        IMPLEMENTADO COM RISCO
+Cor de status                          IMPLEMENTADO
+Níveis                                 NÃO IMPLEMENTADO
+SLA                                    NÃO IMPLEMENTADO
+Observações públicas                   PARCIALMENTE IMPLEMENTADO
+Observações internas                   PARCIALMENTE IMPLEMENTADO
+Histórico                              PARCIALMENTE IMPLEMENTADO
+Finalização                            IMPLEMENTADO COM RISCO
+Solução da demanda                     NÃO IMPLEMENTADO
+Exclusão lógica                        NÃO IMPLEMENTADO
+Lixeira                                NÃO IMPLEMENTADO
+Restauração                            NÃO IMPLEMENTADO
+Kanban                                 NÃO IMPLEMENTADO
+Notificações                           PARCIALMENTE IMPLEMENTADO
+Auditoria                              PARCIALMENTE IMPLEMENTADO
+Anexos                                 PARCIALMENTE IMPLEMENTADO
+Dashboard Admin                        PARCIALMENTE IMPLEMENTADO
+Dashboard Consultor                    IMPLEMENTADO COM RISCO
+Dashboard Cliente                      PARCIALMENTE IMPLEMENTADO
+Modo claro                             IMPLEMENTADO
+Modo escuro                            IMPLEMENTADO
+Mobile                                 PARCIALMENTE IMPLEMENTADO
+PWA                                    PARCIALMENTE IMPLEMENTADO
+GitHub Pages                           IMPLEMENTADO
+
+====================================================================
+47. COMPARAÇÃO COM SISTEMA PROFISSIONAL
+====================================================================
+
+O projeto tem base de ticket management: autenticação, empresas, demanda,
+responsável, status, observação e histórico básico.
+
+Faltam para um sistema profissional: isolamento robusto entre empresas,
+política de permissão efetiva, fila/regras de atribuição, SLA utilizável,
+prioridade operacional, campos de resolução, anexos reais, notas UI,
+notificações UI, auditoria consultável, filtros/paginação, dashboard com
+indicadores, fluxos de aprovação/executar/validar e cobertura de testes.
+
+====================================================================
+48. INCONSISTÊNCIAS ENCONTRADAS
+====================================================================
+
+1. README/STATUS_ATUAL citam resolução obrigatória e exclusão lógica; código
+atual removeu ambos.
+2. README diz consultor solicita empresas; formulário público grava lista
+vazia e não mostra seleção.
+3. ConsultantPermissions e updateConsultantAccess existem, mas não são usados.
+4. canChangeDemandStatus permite admin no helper, enquanto admin não pode
+alterar demanda e helper não é usado.
+5. levels é permitido nas Rules, tela promete dados, mas não há CRUD/modelo.
+6. AuditPage afirma eventos disponíveis, mas não os lê.
+7. Storage está configurado sem upload/UI.
+8. notifications são criadas sem sino/lista.
+9. App.css existe e não é importado.
+10. Brand procura logo.png inexistente.
+11. índices de lixeira persistem após remoção dela.
+12. Demandas antigas com campos deletedAt reaparecem, mas esses campos agora
+não podem ser alterados.
+13. Interfaces e Rules dizem admin somente leitura de demanda, mas helper
+canManageDemand em utils ainda diz que admin pode gerenciar.
+14. createDemand permite consultor preencher companyName livre.
+15. CompaniesPage duplicada/exportada não é usada pela rota.
+
+====================================================================
+49. BUGS POTENCIAIS
+====================================================================
+
+BP-01 | CRÍTICA | firestore.rules / consultantOwnCompanyLink
+Consultor vincula empresa de terceiro e lê dados. Reproduzir: entrar como
+consultor ativo, usar Vincular empresa, escolher empresa ativa. Impacto:
+vazamento multiempresa.
+
+BP-02 | CRÍTICA | firestore.rules / counters
+Usuário ativo altera counters/demands. Impacto: sequência/código incoerente.
+
+BP-03 | ALTA | firestore.rules / demands update requester
+Requester atualiza diretamente title/status/statusName/código via SDK.
+Impacto: integridade de demanda/status comprometida.
+
+BP-04 | ALTA | firestore.rules / demands update consultant
+Consultor autorizado altera companyId/requester/código em demanda disponível.
+Impacto: corrupção e possível movimentação entre empresas.
+
+BP-05 | ALTA | firestore.rules / auditLogs
+Ativo cria audit log com identidade falsificada. Impacto: trilha não confiável.
+
+BP-06 | MÉDIA | src/services/companies.ts
+Edição futura de empresa deixa uniqueCompanyKeys antigas. Impacto: bloqueios
+indevidos e inconsistência de unicidade.
+
+BP-07 | MÉDIA | src/pages/DemandsPages.tsx
+Listas sem limit podem degradar/rejeitar por volume. Impacto: custo e UX.
+
+BP-08 | MÉDIA | src/pages/PublicRegistrationPage.tsx
+Consultor pendente não registra empresas solicitadas. Impacto: aprovação sem
+vínculos e fluxo confuso.
+
+BP-09 | MÉDIA | public/sw.js
+Offline não armazena bundles e cache não tem versionamento de atualização.
+Impacto: PWA pode falhar offline/atualizar de modo inconsistente.
+
+BP-10 | BAIXA | src/components/Brand.tsx
+Logo inexistente força fallback SD. Impacto: branding incompleto.
+
+====================================================================
+50. DÍVIDA TÉCNICA
+====================================================================
+
+CRÍTICA: redesenhar Rules de demands/counters/companyIds e testes reais.
+ALTA: aplicar permissões de consultor, paginação/filtros, empresas/vínculos
+aprovados e auditoria confiável.
+MÉDIA: modularizar DemandsPages, CRUD níveis, UI de notas/anexos/notificações.
+BAIXA: remover código/índices/documentação mortos, revisão visual e i18n html.
+
+====================================================================
+51. MELHORIAS RECOMENDADAS
+====================================================================
+
+P0 | Isolamento de empresa
+Problema: auto-vínculo do consultor. Recomendação: somente admin cria/remove
+vínculos, ou coleção consultantCompanies validada; Rules devem validar.
+Impacto: elimina vazamento. Complexidade: média.
+Arquivos prováveis: firestore.rules, users, DashboardPage, ApprovalsPage.
+
+P0 | Regras de demanda por diff de campos
+Problema: updates amplos. Recomendação: funções Rules para cada operação e
+affectedKeys estritos. Impacto: integridade. Complexidade: alta.
+Arquivos: firestore.rules, services/demands, testes emulador.
+
+P0 | Proteger counters/auditLogs
+Problema: escrita por qualquer ativo. Recomendação: Cloud Function ou Rules
+que só permitam transação segura impossível de burlar; audit server-side.
+Impacto: confiabilidade. Complexidade: alta.
+
+P1 | Fluxo de consultor/aprovação
+Problema: consultor não solicita empresas. Recomendação: selecionar empresas
+no cadastro e administrador aprovar/configurar. Complexidade: média.
+
+P1 | Níveis/SLA
+Problema: placeholder. Recomendação: modelo, CRUD, select e cálculo/alertas.
+Complexidade: média.
+
+P1 | Paginação e filtros
+Problema: leitura integral. Recomendação: queries paginadas, índices somente
+necessários e filtros server-side. Complexidade: média.
+
+P2 | Auditoria e notificações UI
+Problema: dados existem sem interface. Recomendação: telas read-only, filtros,
+marcar lidas e eventos úteis. Complexidade: média.
+
+P2 | Anexos reais
+Problema: somente Rules. Recomendação: upload, metadata, listagem/download,
+limites e tratamento de erro. Complexidade: média.
+
+P2 | PWA
+Problema: SW manual mínimo. Recomendação: configurar vite-plugin-pwa ou
+estratégia explícita de cache/versionamento. Complexidade: média.
+
+P3 | Qualidade
+Problema: componentes muito longos/documentação morta. Recomendação:
+componentizar, remover App.css/índices mortos, atualizar README/STATUS.
+Complexidade: baixa/média.
+
+====================================================================
+52. ORDEM IDEAL DE EVOLUÇÃO
+====================================================================
+
+FASE 1 — Segurança: corrigir companyIds, counters, updates de demand,
+auditLogs e testes Rules em emulador.
+FASE 2 — Identidade e aprovação: vínculo consultor-empresa aprovado,
+permissões aplicadas, estados de cadastro completos.
+FASE 3 — Modelo operacional: níveis/SLA, fluxo de status e transições.
+FASE 4 — Gestão de demandas: filtros, paginação, notas, anexos, auditoria.
+FASE 5 — Dashboards/notificações/relatórios.
+FASE 6 — PWA, performance, acessibilidade, QA visual e documentação.
+
+====================================================================
+53. NOTAS GERAIS
+====================================================================
+
+Arquitetura: 5/10
+Segurança: 3/10
+Banco: 5/10
+Permissões: 3/10
+Demandas: 6/10
+UX: 6/10
+Visual: 7/10
+Responsividade: 6/10
+Performance: 4/10
+Testes: 3/10
+Manutenibilidade: 5/10
+Prontidão para produção: 3/10
+
+NOTA GERAL: 4,6/10.
+Há uma base funcional e visual consistente, mas riscos de autorização
+multiempresa e integridade de dados impedem classificá-lo como pronto para
+produção sensível.
+
+====================================================================
+54. TOP 20 PROBLEMAS MAIS IMPORTANTES
+====================================================================
+
+1. CRÍTICA — consultor auto-vincula qualquer empresa — vazamento de dados —
+   restringir vínculo a aprovação/admin.
+2. CRÍTICA — counters graváveis por qualquer ativo — códigos manipuláveis —
+   restringir servidor/Rules.
+3. CRÍTICA — requester altera campos amplos — integridade comprometida —
+   diff estrito.
+4. ALTA — consultant atualiza campos amplos — corrupção/movimentação —
+   diff estrito por operação.
+5. ALTA — auditLogs forjáveis — auditoria não confiável — gravar server-side.
+6. ALTA — permissões de consultor não aplicadas — controle ilusório —
+   aplicar Rules/UI.
+7. ALTA — consulta de consultor lê toda empresa vinculada — separar fila,
+   atribuição e necessidade de leitura.
+8. MÉDIA — sem testes reais de Rules — regressões de segurança — emulador.
+9. MÉDIA — listas sem paginação — custo/latência — limit/startAfter.
+10. MÉDIA — workflow sem máquina de estados — saltos inválidos — transições.
+11. MÉDIA — SLA/níveis inexistentes — operação incompleta — implementar.
+12. MÉDIA — audit UI placeholder — sem investigação — criar tela.
+13. MÉDIA — notas/anexos sem UI — recursos incompletos — implementar.
+14. MÉDIA — consultor público não solicita empresas — aprovação incompleta.
+15. MÉDIA — companyName livre para consultor criar demanda — inconsistência.
+16. MÉDIA — uniqueCompanyKeys não trata edição — chaves órfãs.
+17. MÉDIA — documentação desatualizada — erro operacional.
+18. BAIXA — logo ausente — branding degradado.
+19. BAIXA — App.css/código morto — manutenção.
+20. BAIXA — bundle grande — desempenho inicial.
+
+====================================================================
+55. TOP 20 PONTOS POSITIVOS
+====================================================================
+
+1. Firebase Auth integrado sem armazenar senha no Firestore.
+2. Bootstrap inicial com e-mail e transação.
+3. HashRouter/base coerentes para GitHub Pages.
+4. Workflow CI executa lint/test/build antes do deploy.
+5. Código de demanda sequencial usa transação.
+6. Empresa usa transação com leituras antes de escritas.
+7. Normalização de CNPJ/nome existe.
+8. CNPJ BrasilAPI preenche formulário.
+9. Status dinâmicos com cor/ordem/ativo.
+10. Compatibilidade de status legado por legacyKeys.
+11. Histórico de status com observação.
+12. Reabertura de cancelada existe.
+13. Workflow por demanda configurável.
+14. Cliente/consultor pendentes ficam inactive.
+15. Aprovação/rejeição grava auditoria.
+16. Tema claro/escuro persistente.
+17. Layout tem sidebar responsiva.
+18. Descrição longa abre em modal.
+19. Manifest/SW/offline básico existem.
+20. Lint, testes existentes e build passam no ambiente auditado.
+
+====================================================================
+56. CHECKLIST FINAL
+====================================================================
+
+PROJETO ESTÁ PRONTO PARA USO REAL?
+PARCIALMENTE. Funciona para demonstração/uso controlado, mas não para dados
+multiempresa sensíveis sem corrigir P0.
+
+PROJETO ESTÁ SEGURO?
+NÃO. Auto-vínculo, updates amplos e counters/auditLogs expostos são riscos
+concretos suportados pelas Rules atuais.
+
+PROJETO ESTÁ PRONTO PARA MÚLTIPLAS EMPRESAS?
+NÃO. O isolamento quebra quando consultor auto-vincula empresa.
+
+PROJETO ESTÁ PRONTO PARA MÚLTIPLOS CONSULTORES?
+PARCIALMENTE. Há companyIds e aceite, mas não há reatribuição/fila segura nem
+controle granular aplicado.
+
+PROJETO ESTÁ PRONTO PARA CRESCER?
+NÃO. Faltam paginação, agregações, testes de regra e modularização.
+
+====================================================================
+57. 20 ARQUIVOS MAIS IMPORTANTES PARA REVISÃO POSTERIOR
+====================================================================
+
+1. firestore.rules
+2. src/types/models.ts
+3. src/services/demands.ts
+4. src/pages/DemandsPages.tsx
+5. src/services/users.ts
+6. src/pages/PublicRegistrationPage.tsx
+7. src/pages/DashboardPage.tsx
+8. src/features/auth/AuthContext.tsx
+9. src/lib/firebase.ts
+10. src/App.tsx
+11. src/layouts/AppLayout.tsx
+12. src/services/companies.ts
+13. src/pages/CompaniesManagementPage.tsx
+14. src/pages/ApprovalsPage.tsx
+15. src/pages/AdminPages.tsx
+16. src/services/statuses.ts
+17. storage.rules
+18. firestore.indexes.json
+19. public/sw.js
+20. .github/workflows/deploy-pages.yml
+
+====================================================================
+FIM DA ANÁLISE
+====================================================================

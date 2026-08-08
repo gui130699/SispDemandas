@@ -1,10 +1,11 @@
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
 import type { Company, Demand } from "../types/models";
-import { linkConsultantCompany } from "../services/users";
+import { requestConsultantCompanyAccess } from "../services/users";
+import { requestSector } from "../services/sectors";
 import { elapsedDays } from "../utils/dates";
 
 export function DashboardPage() {
@@ -15,8 +16,13 @@ export function DashboardPage() {
   const [companyToLink, setCompanyToLink] = useState("");
   const [linkingCompany, setLinkingCompany] = useState(false);
   const [linkError, setLinkError] = useState("");
+  const [sectorName, setSectorName] = useState("");
+  const [sectorMessage, setSectorMessage] = useState("");
 
   useEffect(() => {
+    if (profile?.role === "requester" && profile.companyId) {
+      return onSnapshot(doc(db, "companies", profile.companyId), (snapshot) => setCompanies(snapshot.exists() ? [{ id: snapshot.id, ...snapshot.data() } as Company] : []));
+    }
     if (profile?.role !== "consultant") {
       setCompanies([]);
       return;
@@ -122,15 +128,15 @@ export function DashboardPage() {
         {profile?.role === "consultant" && (
           <div className="dashboard-company-link">
             <select
-              aria-label="Empresa para vincular"
+              aria-label="Empresa para solicitar acesso"
               value={companyToLink}
               onChange={(event) => setCompanyToLink(event.target.value)}
               disabled={!availableCompanies.length || linkingCompany}
             >
               <option value="">
                 {availableCompanies.length
-                  ? "Vincular outra empresa"
-                  : "Todas as empresas estão vinculadas"}
+                  ? "Solicitar acesso a empresa"
+                  : "Não há outras empresas ativas"}
               </option>
               {availableCompanies.map((company) => (
                 <option key={company.id} value={company.id}>
@@ -147,26 +153,42 @@ export function DashboardPage() {
                 setLinkError("");
                 setLinkingCompany(true);
                 try {
-                  await linkConsultantCompany(profile, companyToLink);
-                  setSelectedCompanyId(companyToLink);
+                  const company = availableCompanies.find((item) => item.id === companyToLink);
+                  if (!company) return;
+                  await requestConsultantCompanyAccess(profile, company);
                   setCompanyToLink("");
                 } catch (error) {
                   setLinkError(
                     error instanceof Error
                       ? error.message
-                      : "Não foi possível vincular a empresa.",
+                      : "Não foi possível solicitar acesso à empresa.",
                   );
                 } finally {
                   setLinkingCompany(false);
                 }
               }}
             >
-              {linkingCompany ? "Vinculando…" : "Vincular empresa"}
+              {linkingCompany ? "Solicitando…" : "Solicitar acesso"}
             </button>
           </div>
         )}
       </div>
       {linkError && <p className="error">{linkError}</p>}
+      {profile?.role !== "admin" && (
+        <form className="toolbar" onSubmit={async (event) => {
+          event.preventDefault();
+          const actor = profile;
+          if (!actor) return;
+          const company = actor.role === "requester" ? companies[0] : companies.find((item) => item.id === selectedCompanyId);
+          if (!company) { setSectorMessage("Selecione uma empresa para solicitar o setor."); return; }
+          try { await requestSector(actor, company, sectorName); setSectorName(""); setSectorMessage("Solicitação de setor enviada para aprovação."); }
+          catch (error) { setSectorMessage(error instanceof Error ? error.message : "Não foi possível solicitar o setor."); }
+        }}>
+          <label>Solicitar novo setor<input value={sectorName} onChange={(event) => setSectorName(event.target.value)} placeholder="Nome do setor" required minLength={2}/></label>
+          <button className="primary" type="submit" disabled={!sectorName.trim()}>Solicitar setor</button>
+        </form>
+      )}
+      {sectorMessage && <p className="notice" role="status">{sectorMessage}</p>}
       <div className="cards">
         {cards.map(([label, value]) => (
           <Link

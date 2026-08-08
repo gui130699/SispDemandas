@@ -1,0 +1,66 @@
+====================================================================
+ANÁLISE PÓS-CORREÇÕES — SISPDEMANDAS
+====================================================================
+
+Data: 08/08/2026 -03:00
+Branch: fix/core-security-and-professionalization
+Commit inicial: 115c0f83741003591edfe1bfa96085c16e65e848
+Commit da implementação: af834fb124260fcd578a3b84111440becb1547ad
+
+1. ARQUIVOS E ARQUITETURA
+
+Alterados: Firebase, Rules Firestore/Storage, package, modelos, serviços, cadastro, aprovações, dashboard, demandas e testes.
+Criados: functions/ em TypeScript, MIGRACAO_V2.md, .gitignore e relatórios.
+Nenhum dado ou arquivo de produção foi removido.
+As operações de criação, aceite, workflow, status e notas de demanda saíram do navegador e chamam Functions autenticadas.
+Counters e auditLogs passaram a ser exclusivamente server-side.
+
+2. FIRESTORE, USUÁRIOS E EMPRESAS
+
+IMPLEMENTADO: consultantCompanyRequests/{consultantId}_{companyId}; o consultor solicita acesso, não modifica companyIds.
+IMPLEMENTADO: a Function revisa a solicitação de forma atômica e acrescenta o vínculo somente após aprovação administrativa.
+IMPLEMENTADO: cadastro público de consultor seleciona uma ou várias empresas, gravando requestedCompanyIds, nunca companyIds.
+IMPLEMENTADO: aprovações permitem selecionar as empresas autorizadas e registram approvedAt/By/ByName ou rejectedAt/By/ByName/motivo.
+IMPLEMENTADO: permissões de consultor possuem defaults seguros; Functions validam createDemand, takeUnassignedDemand, changeStatus, editDemand, addPublicNote e addInternalNote.
+
+3. DEMANDAS, STATUS E AUDITORIA
+
+IMPLEMENTADO: createDemandSecure valida perfil, empresa ativa e acesso, gera DEM-ANO-SEQUÊNCIA em transação e deriva dados confiáveis no servidor.
+IMPLEMENTADO: mutateDemandSecure controla aceite, workflow, status e notas; status valida catálogo ativo, workflow e allowedNextStatusIds quando houver.
+IMPLEMENTADO: o modelo inclui isInitial, isPaused e finalType.
+IMPLEMENTADO: auditLogs não aceita escrita web; Functions gravam auditoria e um trigger cobre alterações administrativas em users, companies e consultantCompanyRequests.
+
+4. RULES E STORAGE
+
+IMPLEMENTADO: usuário web não lê/escreve counters, não escreve auditLogs e não cria/atualiza/exclui demandas, histórico ou notas diretamente.
+IMPLEMENTADO: leituras continuam isoladas por empresa e perfil; somente admin altera users/companyIds.
+IMPLEMENTADO COM SEGURANÇA RESTRITIVA: Storage mantém leitura isolada, mas escrita direta foi bloqueada até existir fluxo seguro de anexos e metadata.
+
+5. FUNCTIONS E DEPLOY
+
+Criadas: createDemandSecure, mutateDemandSecure, reviewConsultantCompanyRequest e auditAdministrativeWrite.
+As Functions, Rules e Storage NÃO foram publicados neste trabalho.
+Execute nesta ordem: npm --prefix functions install; npm --prefix functions run build; firebase deploy --only functions; firebase deploy --only firestore:rules,firestore:indexes,storage.
+Publique Functions antes das Rules. GitHub Pages publica somente o frontend.
+
+6. VALIDAÇÃO
+
+npm run lint: APROVADO.
+npm run test:run: APROVADO (7 testes).
+npm run test:rules: APROVADO (6 testes reais contra Firestore Emulator).
+npm --prefix functions run lint/build: APROVADOS.
+npm run build: APROVADO.
+O build ainda emite o warning de chunk JavaScript acima de 500 kB.
+
+7. AUDITORIA DE SEGURANÇA
+
+CORRIGIDO: auto-vínculo de consultor, escrita web em counters, escrita web em auditLogs e edição web direta de campos administrativos de demanda.
+Os testes reais verificam isolamento de empresas, auto-vínculo, solicitações, counters, auditLogs e notas internas.
+
+8. PENDÊNCIAS REAIS
+
+NÃO IMPLEMENTADO nesta entrega: CRUD de níveis/SLA, lixeira/restauração, anexos, UI de auditoria/notificações, filtros/paginação, dashboards analíticos, E2E, refatoração total de DemandsPages e PWA via vite-plugin-pwa.
+Antes do deploy, consulte MIGRACAO_V2.md, migre consultores existentes sem permissions e marque exatamente um status ativo como isInitial.
+A branch não foi mesclada na main nem enviada ao GitHub, para não publicar frontend que depende de Functions ainda não implantadas.
+URL de produção configurada: https://gui130699.github.io/SispDemandas/
+====================================================================

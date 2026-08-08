@@ -1,18 +1,131 @@
 import { createUserWithEmailAndPassword, deleteUser, signOut } from "firebase/auth";
-import { collection, doc, onSnapshot, query, runTransaction, serverTimestamp, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, runTransaction, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Brand } from "../components/Brand";
 import { auth, db } from "../lib/firebase";
-import type { Company, Role } from "../types/models";
+import type { Company, Role, Sector } from "../types/models";
+
 type PublicBootstrap = { initialized?: boolean };
-const errorText = (error: unknown) => { const code = typeof error === "object" && error && "code" in error ? String(error.code) : ""; if (code.includes("email-already-in-use")) return "Já existe uma conta com este e-mail."; if (code.includes("weak-password")) return "A senha deve ter pelo menos 8 caracteres."; if (code.includes("permission-denied")) return "Este cadastro não foi autorizado ou a configuração ainda não está pronta."; return "Não foi possível concluir o cadastro. Tente novamente."; };
+
+function errorText(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  if (code.includes("email-already-in-use")) return "Já existe uma conta com este e-mail.";
+  if (code.includes("weak-password")) return "A senha deve ter pelo menos 8 caracteres.";
+  if (code.includes("permission-denied")) return "Este cadastro não foi autorizado ou a configuração ainda não está pronta.";
+  return "Não foi possível concluir o cadastro. Tente novamente.";
+}
+
 export function PublicRegistrationPage() {
- const [companies,setCompanies]=useState<Company[]>([]),[role,setRole]=useState<Role|null>(null),[bootstrap,setBootstrap]=useState<PublicBootstrap>({initialized:false}),[password,setPassword]=useState(""),[confirmation,setConfirmation]=useState(""),[saving,setSaving]=useState(false),[error,setError]=useState(""),[complete,setComplete]=useState<"client"|"consultant"|"admin"|null>(null);
- useEffect(()=>onSnapshot(query(collection(db,"companies"),where("active","==",true)),snapshot=>setCompanies(snapshot.docs.map(item=>({id:item.id,...item.data()})as Company).sort((a,b)=>a.legalName.localeCompare(b.legalName,"pt-BR"))),()=>setError("Não foi possível carregar as empresas.")),[]);
- useEffect(()=>onSnapshot(doc(db,"publicConfig","bootstrap"),snapshot=>setBootstrap(snapshot.exists()?snapshot.data() as PublicBootstrap:{initialized:false}),()=>setBootstrap({initialized:false})),[]);
- async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();if(!role)return;setError("");const form=new FormData(event.currentTarget),email=String(form.get("email")).trim().toLowerCase(),name=String(form.get("name")).trim(),selected=role==="requester"?[String(form.get("companyId")||"")]:[];if(password.length<8||password!==confirmation){setError(password.length<8?"A senha deve ter pelo menos 8 caracteres.":"As senhas não coincidem.");return}if(role==="requester"&&(!selected.length||selected.some(id=>!companies.some(company=>company.id===id)))){setError("Selecione uma empresa válida.");return}setSaving(true);let created:Awaited<ReturnType<typeof createUserWithEmailAndPassword>>["user"]|null=null;try{created=(await createUserWithEmailAndPassword(auth,email,password)).user;if(role==="admin"){await runTransaction(db,async tx=>{const owner=doc(db,"bootstrapConfig","owner"),publicConfig=doc(db,"publicConfig","bootstrap"),[ownerDoc,publicDoc]=await Promise.all([tx.get(owner),tx.get(publicConfig)]);if(!ownerDoc.exists()||ownerDoc.data().initialized===true||ownerDoc.data().emailNormalized!==email||publicDoc.data()?.initialized===true)throw new Error("permission-denied");tx.set(doc(db,"users",created!.uid),{uid:created!.uid,name,email,emailNormalized:email,role:"admin",companyId:null,companyIds:[],active:true,registrationStatus:"approved",createdAt:serverTimestamp(),updatedAt:serverTimestamp()});tx.update(owner,{initialized:true,adminUid:created!.uid,initializedAt:serverTimestamp()});tx.set(publicConfig,{initialized:true,initializedAt:serverTimestamp()},{merge:true})});setComplete("admin")}else{const company=companies.find(item=>item.id===selected[0]);await runTransaction(db,async tx=>tx.set(doc(db,"users",created!.uid),{uid:created!.uid,name,email,emailNormalized:email,role,companyId:role==="requester"?company!.id:null,companyName:role==="requester"?company!.legalName:null,companyIds:[],requestedCompanyIds:[],defaultSector:role==="requester"?String(form.get("defaultSector")||"").trim():"",phone:String(form.get("phone")||"").trim(),active:false,registrationStatus:"pending",createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));await signOut(auth);setComplete(role==="consultant"?"consultant":"client")}}catch(failure){if(created)try{await deleteUser(created)}catch{}await signOut(auth);setError(errorText(failure))}finally{setSaving(false)}}
- if(complete)return <section className="auth"><div className="auth-card"><Brand/><h1>{complete==="admin"?"Administrador configurado":"Cadastro enviado"}</h1><p>{complete==="admin"?"O bootstrap foi concluído com segurança. Agora entre para administrar o sistema.":complete==="consultant"?"Seu perfil de consultor está aguardando aprovação.":"Seu acesso está aguardando aprovação do administrador."}</p><Link to="/login">Voltar ao acesso</Link></div></section>;
- const title=role==="requester"?"Cadastro de Cliente":role==="consultant"?"Cadastro de Consultor":"Configurar administrador";
- return <section className="auth"><div className="auth-card registration-card"><Brand/>{!role?<><div className="registration-heading"><span>Primeiro acesso</span><h1>Como você utilizará o <b>SISPDEMANDAS</b>?</h1><p>Selecione o perfil que melhor descreve sua atuação.</p></div><div className="registration-choices"><button className="registration-choice" onClick={()=>setRole("requester")}><span className="choice-icon">⌁</span><strong>Cliente</strong><small>Abra e acompanhe demandas da sua empresa.</small><span className="choice-link">Criar cadastro →</span></button><button className="registration-choice" onClick={()=>setRole("consultant")}><span className="choice-icon">◈</span><strong>Consultor</strong><small>Gerencie e execute demandas das empresas em que presta atendimento.</small><span className="choice-link">Criar cadastro →</span></button>{bootstrap.initialized===false&&<button className="registration-choice" onClick={()=>setRole("admin")}><span className="choice-icon">◆</span><strong>Configurar administrador</strong><small>Disponível somente para o e-mail proprietário autorizado.</small><span className="choice-link">Iniciar configuração →</span></button>}</div><Link className="registration-login" to="/login">Já tenho acesso <span>→</span></Link></>:<><button className="profile-back" type="button" onClick={()=>setRole(null)}><span aria-hidden="true">←</span> Escolher outro perfil</button><h1>{title}</h1><form onSubmit={submit}><label>Nome completo<input name="name" required minLength={3} autoFocus/></label><label>E-mail<input name="email" type="email" required autoComplete="email"/></label>{role==="requester"&&<label>Empresa<select name="companyId" required defaultValue=""><option value="" disabled>Selecione uma empresa</option>{companies.map(company=><option key={company.id} value={company.id}>{company.legalName}</option>)}</select></label>}{role==="requester"&&<label>Setor padrão (opcional)<input name="defaultSector"/></label>}{role!=="admin"&&<label>Telefone (opcional)<input name="phone" type="tel"/></label>}<label>Senha<input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={event=>setPassword(event.target.value)}/></label><label>Confirmar senha<input type="password" required minLength={8} autoComplete="new-password" value={confirmation} onChange={event=>setConfirmation(event.target.value)}/></label>{error&&<p className="error" role="alert">{error}</p>}<button className="primary" disabled={saving||(role==="requester"&&!companies.length)}>{saving?"Enviando…":role==="admin"?"Configurar administrador":"Enviar cadastro"}</button></form><Link to="/login">Já tenho acesso</Link></>}</div></section>;
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [requesterCompanyId, setRequesterCompanyId] = useState("");
+  const [role, setRole] = useState<Role | null>(null);
+  const [bootstrap, setBootstrap] = useState<PublicBootstrap>({ initialized: false });
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [complete, setComplete] = useState<"client" | "consultant" | "admin" | null>(null);
+
+  useEffect(() => onSnapshot(
+    query(collection(db, "companies"), where("active", "==", true)),
+    (snapshot) => setCompanies(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Company).sort((a, b) => a.legalName.localeCompare(b.legalName, "pt-BR"))),
+    () => setError("Não foi possível carregar as empresas."),
+  ), []);
+  useEffect(() => onSnapshot(query(collection(db, "sectors"), where("active", "==", true)), (snapshot) => setSectors(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Sector))), []);
+  useEffect(() => onSnapshot(doc(db, "publicConfig", "bootstrap"), (snapshot) => setBootstrap(snapshot.exists() ? snapshot.data() as PublicBootstrap : { initialized: false }), () => setBootstrap({ initialized: false })), []);
+
+  function chooseRole(next: Role | null) {
+    setRole(next);
+    setSelectedCompanyIds([]);
+    setRequesterCompanyId("");
+    setError("");
+  }
+
+  function toggleCompany(companyId: string) {
+    setSelectedCompanyIds((current) => current.includes(companyId) ? current.filter((id) => id !== companyId) : [...current, companyId]);
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!role) return;
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email")).trim().toLowerCase();
+    const name = String(form.get("name")).trim();
+    const requesterCompanyId = String(form.get("companyId") || "");
+    setError("");
+    if (password.length < 8 || password !== confirmation) {
+      setError(password.length < 8 ? "A senha deve ter pelo menos 8 caracteres." : "As senhas não coincidem.");
+      return;
+    }
+    if (role === "requester" && !companies.some((company) => company.id === requesterCompanyId)) {
+      setError("Selecione uma empresa válida.");
+      return;
+    }
+    if (role === "consultant" && !selectedCompanyIds.length) {
+      setError("Selecione ao menos uma empresa para a qual deseja solicitar acesso.");
+      return;
+    }
+    setSaving(true);
+    let created: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>["user"] | null = null;
+    try {
+      created = (await createUserWithEmailAndPassword(auth, email, password)).user;
+      if (role === "admin") {
+        await runTransaction(db, async (transaction) => {
+          const owner = doc(db, "bootstrapConfig", "owner");
+          const publicConfig = doc(db, "publicConfig", "bootstrap");
+          const [ownerDoc, publicDoc] = await Promise.all([transaction.get(owner), transaction.get(publicConfig)]);
+          if (!ownerDoc.exists() || ownerDoc.data().initialized === true || ownerDoc.data().emailNormalized !== email || publicDoc.data()?.initialized === true) throw new Error("permission-denied");
+          transaction.set(doc(db, "users", created!.uid), { uid: created!.uid, name, email, emailNormalized: email, role: "admin", companyId: null, companyIds: [], requestedCompanyIds: [], active: true, registrationStatus: "approved", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          transaction.update(owner, { initialized: true, adminUid: created!.uid, initializedAt: serverTimestamp() });
+          transaction.set(publicConfig, { initialized: true, initializedAt: serverTimestamp() }, { merge: true });
+        });
+        setComplete("admin");
+      } else {
+        const company = companies.find((item) => item.id === requesterCompanyId);
+        await setDoc(doc(db, "users", created.uid), {
+          uid: created.uid, name, email, emailNormalized: email, role,
+          companyId: role === "requester" ? company!.id : null,
+          companyName: role === "requester" ? company!.legalName : null,
+          companyIds: [], requestedCompanyIds: role === "consultant" ? selectedCompanyIds : [],
+          defaultSector: role === "requester" ? String(form.get("defaultSector") || "").trim() : "",
+          phone: String(form.get("phone") || "").trim(), active: false,
+          registrationStatus: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        });
+        await signOut(auth);
+        setComplete(role === "consultant" ? "consultant" : "client");
+      }
+    } catch (failure) {
+      if (created) try { await deleteUser(created); } catch { /* Auth cleanup is best effort. */ }
+      await signOut(auth);
+      setError(errorText(failure));
+    } finally { setSaving(false); }
+  }
+
+  if (complete) return <section className="auth"><div className="auth-card"><Brand/><h1>{complete === "admin" ? "Administrador configurado" : "Cadastro enviado"}</h1><p>{complete === "admin" ? "O bootstrap foi concluído com segurança." : complete === "consultant" ? "Seu perfil e as empresas solicitadas aguardam aprovação." : "Seu acesso aguarda aprovação do administrador."}</p><Link to="/login">Voltar ao acesso</Link></div></section>;
+  const title = role === "requester" ? "Cadastro de Cliente" : role === "consultant" ? "Cadastro de Consultor" : "Configurar administrador";
+
+  return <section className="auth"><div className="auth-card registration-card"><Brand/>
+    {!role ? <>
+      <div className="registration-heading"><span>Primeiro acesso</span><h1>Como você utilizará o <b>SISPDEMANDAS</b>?</h1><p>Selecione o perfil que melhor descreve sua atuação.</p></div>
+      <div className="registration-choices">
+        <button className="registration-choice" type="button" onClick={() => chooseRole("requester")}><strong>Cliente</strong><small>Abra e acompanhe demandas da sua empresa.</small><span className="choice-link">Criar cadastro →</span></button>
+        <button className="registration-choice" type="button" onClick={() => chooseRole("consultant")}><strong>Consultor</strong><small>Solicite acesso às empresas em que presta atendimento.</small><span className="choice-link">Criar cadastro →</span></button>
+        {bootstrap.initialized === false && <button className="registration-choice" type="button" onClick={() => chooseRole("admin")}><strong>Configurar administrador</strong><small>Disponível somente ao e-mail proprietário autorizado.</small><span className="choice-link">Iniciar configuração →</span></button>}
+      </div><Link className="registration-login" to="/login">Já tenho acesso <span>→</span></Link>
+    </> : <>
+      <button className="profile-back" type="button" onClick={() => chooseRole(null)}>← Escolher outro perfil</button><h1>{title}</h1>
+      <form onSubmit={submit}>
+        <label>Nome completo<input name="name" required minLength={3} autoFocus/></label><label>E-mail<input name="email" type="email" required autoComplete="email"/></label>
+        {role === "requester" && <label>Empresa<select name="companyId" required value={requesterCompanyId} onChange={(event) => setRequesterCompanyId(event.target.value)}><option value="" disabled>Selecione uma empresa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.legalName}</option>)}</select></label>}
+        {role === "consultant" && <fieldset className="company-request-list"><legend>Empresas para as quais solicita acesso *</legend><p className="muted">A aprovação e o vínculo final serão definidos pelo administrador.</p>{companies.map((company) => <label key={company.id} className="check-row"><input type="checkbox" checked={selectedCompanyIds.includes(company.id)} onChange={() => toggleCompany(company.id)}/>{company.legalName}</label>)}</fieldset>}
+        {role === "requester" && <label>Setor padrão (opcional)<select name="defaultSector" defaultValue=""><option value="">Selecione um setor</option>{sectors.filter((sector) => sector.companyId === requesterCompanyId).map((sector) => <option key={sector.id} value={sector.name}>{sector.name}</option>)}</select></label>}
+        {role !== "admin" && <label>Telefone (opcional)<input name="phone" type="tel"/></label>}
+        <label>Senha<input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)}/></label><label>Confirmar senha<input type="password" required minLength={8} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)}/></label>
+        {error && <p className="error" role="alert">{error}</p>}<button className="primary" disabled={saving || (role === "requester" && !companies.length)}>{saving ? "Enviando…" : role === "admin" ? "Configurar administrador" : "Enviar cadastro"}</button>
+      </form><Link to="/login">Já tenho acesso</Link>
+    </>}
+  </div></section>;
 }

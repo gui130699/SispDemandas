@@ -4,9 +4,10 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { arrayUnion, doc, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
-import { auth, db, secondaryAuth } from "../lib/firebase";
-import type { Role, UserProfile } from "../types/models";
+import { doc, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
+import { auth, db, functions, secondaryAuth } from "../lib/firebase";
+import { defaultConsultantPermissions, type Company, type Role, type UserProfile } from "../types/models";
 import { audit } from "./audit";
 
 export interface CreateUserInput {
@@ -45,6 +46,8 @@ export async function createManagedUser(
       companyId: input.companyId,
       companyName: input.companyName,
       companyIds: input.role === "consultant" ? input.companyIds ?? [] : [],
+      requestedCompanyIds: [],
+      permissions: input.role === "consultant" ? defaultConsultantPermissions : {},
       active: true,
       registrationStatus: "approved",
       createdAt: serverTimestamp(),
@@ -89,7 +92,9 @@ export async function approveRegistration(user: UserProfile, admin: UserProfile,
   batch.update(doc(db, "users", user.uid), {
     active: true, registrationStatus: "approved", rejectionReason: null,
     companyIds: user.role === "consultant" ? cleanCompanyIds : [],
+    permissions: user.role === "consultant" ? { ...defaultConsultantPermissions, ...user.permissions } : {},
     defaultSector: defaultSector ?? user.defaultSector ?? "", updatedAt: serverTimestamp(), updatedBy: admin.uid,
+    approvedAt: serverTimestamp(), approvedBy: admin.uid, approvedByName: admin.name,
   });
   batch.set(doc(db, "notifications", `${user.uid}_${Date.now()}`), { userId: user.uid, title: "Cadastro aprovado", message: "Seu acesso ao SISPDEMANDAS foi liberado.", read: false, createdAt: serverTimestamp() });
   await batch.commit();
@@ -97,7 +102,7 @@ export async function approveRegistration(user: UserProfile, admin: UserProfile,
 }
 
 export async function rejectRegistration(user: UserProfile, admin: UserProfile, reason: string) {
-  await updateDoc(doc(db, "users", user.uid), { active: false, registrationStatus: "rejected", rejectionReason: reason.trim() || "Cadastro não aprovado.", updatedAt: serverTimestamp(), updatedBy: admin.uid });
+  await updateDoc(doc(db, "users", user.uid), { active: false, registrationStatus: "rejected", rejectionReason: reason.trim() || "Cadastro não aprovado.", updatedAt: serverTimestamp(), updatedBy: admin.uid, rejectedAt: serverTimestamp(), rejectedBy: admin.uid, rejectedByName: admin.name });
   await audit(admin, "reject", "user", user.uid, user.companyId, undefined, { reason });
 }
 
@@ -130,17 +135,22 @@ export async function setUserActive(
 export const resendPasswordSetup = (email: string) =>
   sendPasswordResetEmail(auth, email.trim().toLowerCase());
 
-export async function linkConsultantCompany(
-  consultant: UserProfile,
-  companyId: string,
-) {
+export async function requestConsultantCompanyAccess(consultant: UserProfile, company: Company) {
   if (consultant.role !== "consultant") {
-    throw new Error("Apenas consultores podem vincular empresas.");
+    throw new Error("Apenas consultores podem solicitar empresas.");
   }
-  await updateDoc(doc(db, "users", consultant.uid), {
-    companyIds: arrayUnion(companyId),
-    updatedAt: serverTimestamp(),
+  const id = `${consultant.uid}_${company.id}`;
+  await setDoc(doc(db, "consultantCompanyRequests", id), {
+    id, consultantId: consultant.uid, consultantName: consultant.name,
+    companyId: company.id, companyName: company.legalName, status: "pending",
+    requestedAt: serverTimestamp(),
   });
+}
+
+const reviewCompanyRequest = httpsCallable<{ requestId: string; decision: "approved" | "rejected"; rejectionReason?: string }, { ok: true }>(functions, "reviewConsultantCompanyRequest");
+export async function reviewConsultantCompanyAccess(requestId: string, decision: "approved" | "rejected", rejectionReason?: string) {
+  try { await reviewCompanyRequest({ requestId, decision, rejectionReason }); }
+  catch (error) { throw new Error(error instanceof Error && error.message.includes("functions/not-found") ? "A Function de revisão ainda não foi publicada no Firebase." : "Não foi possível revisar a solicitação."); }
 }
 
 export function userCreationError(error: unknown) {
