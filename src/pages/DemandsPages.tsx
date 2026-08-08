@@ -573,8 +573,8 @@ export function DemandDetailPage() {
         )}
         {error && <p className="error">{error}</p>}
       </section>
-      <section className="panel status-history">
-        <h2>Resumo por status</h2>
+      <details className="panel status-history">
+        <summary>Resumo por status</summary>
         <div className="status-report">
           {Array.from(statusGroups.entries()).map(([key, events]) => {
             const latest = events[0];
@@ -678,7 +678,7 @@ export function DemandDetailPage() {
             </article>
           )}
         </div>
-      </section>
+      </details>
       {descriptionOpen && (
         <div
           className="demand-description-modal-backdrop"

@@ -500,8 +500,21 @@ header small {
   display: grid;
   gap: 0;
 }
-.status-history h2 {
-  margin-bottom: 6px;
+.status-history {
+  padding: 0;
+}
+.status-history > summary {
+  padding: 19px 20px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.status-history[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.status-history > .status-report {
+  margin: 14px 20px 20px;
 }
 .status-report {
   overflow: hidden;
