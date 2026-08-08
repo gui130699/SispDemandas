@@ -181,6 +181,7 @@ header small {
   background: var(--surface-alt);
   box-shadow: none;
 }
+.install-wrap{position:relative}.install-app{border:1px solid #2f78c8;background:#174f8e;color:#fff;border-radius:999px;padding:.5rem .8rem;font-weight:700;white-space:nowrap}.install-tip{position:absolute;right:0;top:calc(100% + .5rem);z-index:10;width:250px;padding:.65rem;border-radius:.55rem;background:var(--panel);border:1px solid var(--line);font-size:.78rem;box-shadow:0 8px 22px #0004}
 .online {
   font-size: 13px;
   color: #17864b;
