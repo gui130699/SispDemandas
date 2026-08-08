@@ -418,13 +418,14 @@ export function DemandDetailPage() {
                 aria-label="Alterar status"
                 defaultValue=""
                 onChange={async (e) => {
-                  const next = statuses.find((s) => s.id === e.target.value);
+                  const statusSelect = e.currentTarget;
+                  const next = statuses.find((s) => s.id === statusSelect.value);
                   if (!next || !profile) return;
                   if (next.id === demand.statusId) {
                     setError(
                       "Este já é o status atual. Use “Salvar observação” para atualizá-la.",
                     );
-                    e.currentTarget.value = "";
+                    statusSelect.value = "";
                     return;
                   }
                   try {
@@ -435,7 +436,7 @@ export function DemandDetailPage() {
                       statusObservation,
                     );
                     setStatusObservation("");
-                    e.currentTarget.value = "";
+                    statusSelect.value = "";
                   } catch (err) {
                     setError(
                       err instanceof Error
