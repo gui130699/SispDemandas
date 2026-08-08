@@ -251,15 +251,26 @@ header small {
   flex: 1;
 }
 .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 9px 16px;
   background: linear-gradient(135deg, #123c73, #4285d4);
   color: #fff;
   border-color: #123c73;
   box-shadow: 0 6px 16px #123c7338;
+  text-decoration: none;
 }
 .primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #0d2f5d, #2e6fb8);
   border-color: #0d2f5d;
   box-shadow: 0 10px 22px #123c7344;
+}
+.dashboard-primary-action {
+  border-radius: 999px;
+  padding-inline: 20px;
+  letter-spacing: .01em;
 }
 .danger {
   color: #fff;

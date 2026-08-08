@@ -50,12 +50,12 @@ export function DashboardPage() {
     <Page title="Dashboard" subtitle="Visão geral das demandas">
       <div className="toolbar dashboard-actions">
         {profile?.role === "admin" && (
-          <Link className="primary" to="/usuarios?novo=1">
+          <Link className="primary dashboard-primary-action" to="/usuarios?novo=1">
             Cadastrar usuário
           </Link>
         )}
         {profile?.role === "requester" && (
-          <Link className="primary" to="/demandas/nova">
+          <Link className="primary dashboard-primary-action" to="/demandas/nova">
             Nova demanda
           </Link>
         )}
