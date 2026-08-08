@@ -18,6 +18,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import type { Company, Role, UserProfile } from "../types/models";
 import {
   createManagedUser,
+  deleteManagedUser,
   resendPasswordSetup,
   setUserActive,
   userCreationError,
@@ -341,6 +342,23 @@ export function UsersPage() {
                         }}
                       >
                         Redefinir senha
+                      </button>
+                      <button
+                        className="danger"
+                        type="button"
+                        disabled={user.uid === profile?.uid}
+                        onClick={async () => {
+                          if (!profile || user.uid === profile.uid) return;
+                          if (!window.confirm(`Excluir permanentemente ${user.name}? Esta ação remove o acesso e não pode ser desfeita.`)) return;
+                          try {
+                            await deleteManagedUser(user, profile);
+                            setNotice(`${user.name} foi excluído permanentemente.`);
+                          } catch {
+                            setError("Não foi possível excluir o usuário. Verifique se a função administrativa foi publicada.");
+                          }
+                        }}
+                      >
+                        Excluir
                       </button>
                     </div>
                   </td>

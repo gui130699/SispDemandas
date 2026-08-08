@@ -6,6 +6,8 @@ import {
 } from "firebase/auth";
 import { doc, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { auth, db, secondaryAuth } from "../lib/firebase";
+import { functions } from "../lib/firebase";
+import { httpsCallable } from "firebase/functions";
 import type { Role, UserProfile } from "../types/models";
 import { audit } from "./audit";
 
@@ -129,6 +131,12 @@ export async function setUserActive(
 
 export const resendPasswordSetup = (email: string) =>
   sendPasswordResetEmail(auth, email.trim().toLowerCase());
+
+export async function deleteManagedUser(user: UserProfile, admin: UserProfile) {
+  if (user.uid === admin.uid) throw new Error("Você não pode excluir sua própria conta.");
+  const remove = httpsCallable<{ uid: string }, { deleted: true }>(functions, "deleteManagedUser");
+  await remove({ uid: user.uid });
+}
 
 export function userCreationError(error: unknown) {
   const code =
