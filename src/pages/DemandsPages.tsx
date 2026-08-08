@@ -282,9 +282,16 @@ export function DemandDetailPage() {
       <Page title="Demanda">
         <p>Carregando…</p>
       </Page>
-    );
+  );
   const current = resolveStatus(demand, statuses);
   const canManage = profile?.role === "admin" || profile?.role === "consultant";
+  const statusGroups = history
+    .filter((event) => event.type === "status")
+    .reduce((groups, event) => {
+      const key = event.statusId || event.statusName || event.id;
+      groups.set(key, [...(groups.get(key) ?? []), event]);
+      return groups;
+    }, new Map<string, DemandHistoryEvent[]>());
   return (
     <Page title="Detalhes da demanda">
       <section className="demand-summary" style={statusStyle(current.color)}>
@@ -411,27 +418,51 @@ export function DemandDetailPage() {
       </section>
       <section className="panel status-history">
         <h2>Resumo por status</h2>
-        {history.filter((event) => event.type === "status").map((event) => (
-          <article className="status-history-item" key={event.id}>
-            <div>
-              <strong>{event.statusName || "Status atualizado"}</strong>
-              <small>
-                {event.authorName} ·{" "}
-                {event.createdAt?.toDate().toLocaleString("pt-BR") || "Agora"}
-              </small>
-            </div>
-            <p>{event.observation || "Sem observação registrada."}</p>
-          </article>
-        ))}
-        {!history.some((event) => event.type === "status") && (
-          <article className="status-history-item">
-            <div>
-              <strong>{current.name}</strong>
-              <small>Status atual</small>
-            </div>
-            <p>Sem observação registrada.</p>
-          </article>
-        )}
+        <div className="status-report">
+          {Array.from(statusGroups.entries()).map(([key, events]) => {
+            const latest = events[0];
+            const previousEvents = events.slice(1);
+            return (
+              <article className="status-report-line" key={key}>
+                <p>
+                  <strong>{latest.statusName || "Status atualizado"}</strong>
+                  <span> — {latest.observation || "Sem observação registrada."}</span>
+                  <small>
+                    {" "}
+                    · {latest.authorName} ·{" "}
+                    {latest.createdAt?.toDate().toLocaleString("pt-BR") || "Agora"}
+                  </small>
+                </p>
+                {!!previousEvents.length && (
+                  <details>
+                    <summary>
+                      Ver {previousEvents.length} registro
+                      {previousEvents.length > 1 ? "s" : ""} anterior
+                      {previousEvents.length > 1 ? "es" : ""}
+                    </summary>
+                    {previousEvents.map((event) => (
+                      <p className="status-report-previous" key={event.id}>
+                        {event.observation || "Sem observação registrada."} ·{" "}
+                        {event.authorName} ·{" "}
+                        {event.createdAt?.toDate().toLocaleString("pt-BR") ||
+                          "Agora"}
+                      </p>
+                    ))}
+                  </details>
+                )}
+              </article>
+            );
+          })}
+          {!statusGroups.size && (
+            <article className="status-report-line">
+              <p>
+                <strong>{current.name}</strong>
+                <span> — Sem observação registrada.</span>
+                <small> · Status atual</small>
+              </p>
+            </article>
+          )}
+        </div>
       </section>
     </Page>
   );
