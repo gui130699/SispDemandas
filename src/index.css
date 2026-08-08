@@ -353,8 +353,60 @@ header small {
 .demand-controls {
   min-width: 0;
 }
+.demand-status-update {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  margin: 18px 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+}
+.demand-status-update label {
+  display: grid;
+  gap: 7px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.demand-status-update textarea {
+  min-height: 66px;
+  margin: 0;
+}
 .demand-actions {
+  margin: 0;
   justify-content: flex-end;
+}
+.status-history {
+  display: grid;
+  gap: 0;
+}
+.status-history h2 {
+  margin-bottom: 6px;
+}
+.status-history-item {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.42fr) 1fr;
+  gap: 18px;
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+}
+.status-history-item strong,
+.status-history-item small {
+  display: block;
+}
+.status-history-item small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.status-history-item p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 .danger {
   color: #fff;
@@ -783,6 +835,16 @@ dd {
   }
   .demand-summary-item:nth-child(-n + 2) {
     border-top: 0;
+  }
+  .demand-status-update {
+    grid-template-columns: 1fr;
+  }
+  .demand-actions {
+    justify-content: flex-start;
+  }
+  .status-history-item {
+    grid-template-columns: 1fr;
+    gap: 7px;
   }
   button {
     min-height: 42px;

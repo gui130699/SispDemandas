@@ -103,5 +103,16 @@ export interface Demand {
   lastActivityAt?: Timestamp;
 }
 
+export interface DemandHistoryEvent {
+  id: string;
+  type: "status" | "assignment" | string;
+  statusId?: string;
+  statusName?: string;
+  observation?: string;
+  authorId: string;
+  authorName: string;
+  createdAt?: Timestamp;
+}
+
 export const legacyStatusLabels: Record<LegacyStatus, string> = { new: "Nova", triage: "Em triagem", waiting_information: "Aguardando informações", analysis: "Em análise", development: "Em execução", testing: "Em teste", waiting_validation: "Aguardando validação", completed: "Concluída", cancelled: "Cancelada", paused: "Pausada" };
 export const roleLabels: Record<Role, string> = { admin: "Administrador", consultant: "Consultor", requester: "Cliente" };

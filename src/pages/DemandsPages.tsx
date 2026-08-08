@@ -17,7 +17,12 @@ import {
   softDeleteDemand,
 } from "../services/demands";
 import { resolveStatus } from "../services/statuses";
-import type { Demand, DemandStatus, Priority } from "../types/models";
+import type {
+  Demand,
+  DemandHistoryEvent,
+  DemandStatus,
+  Priority,
+} from "../types/models";
 import { elapsedDays } from "../utils/dates";
 import { Page } from "./DashboardPage";
 const statusStyle = (color?: string) => ({
@@ -234,6 +239,8 @@ export function DemandDetailPage() {
   const { profile } = useAuth();
   const [demand, setDemand] = useState<Demand | null>(null);
   const [statuses, setStatuses] = useState<DemandStatus[]>([]);
+  const [history, setHistory] = useState<DemandHistoryEvent[]>([]);
+  const [statusObservation, setStatusObservation] = useState("");
   const [error, setError] = useState("");
   useEffect(
     () =>
@@ -252,6 +259,23 @@ export function DemandDetailPage() {
           ),
       ),
     [],
+  );
+  useEffect(
+    () =>
+      onSnapshot(
+        query(
+          collection(db, "demands", id, "history"),
+          orderBy("createdAt", "desc"),
+        ),
+        (snapshot) =>
+          setHistory(
+            snapshot.docs.map(
+              (item) =>
+                ({ id: item.id, ...item.data() }) as DemandHistoryEvent,
+            ),
+          ),
+      ),
+    [id],
   );
   if (!demand)
     return (
@@ -303,68 +327,111 @@ export function DemandDetailPage() {
       </section>
       <section className="demand-controls">
         {canManage && (
-          <div className="actions demand-actions">
-            {profile?.role === "consultant" && !demand.consultantId && (
-              <button
-                type="button"
-                className="primary"
-                onClick={async () => {
+          <div className="demand-status-update">
+            <label>
+              Observação deste status *
+              <textarea
+                rows={2}
+                value={statusObservation}
+                onChange={(event) => setStatusObservation(event.target.value)}
+                placeholder="Descreva o andamento ou a ação realizada."
+              />
+            </label>
+            <div className="actions demand-actions">
+              {profile?.role === "consultant" && !demand.consultantId && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={async () => {
+                    try {
+                      await acceptDemand(demand, profile);
+                    } catch (err) {
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : "Não foi possível assumir a demanda.",
+                      );
+                    }
+                  }}
+                >
+                  Assumir demanda
+                </button>
+              )}
+              <select
+                aria-label="Alterar status"
+                defaultValue=""
+                onChange={async (e) => {
+                  const next = statuses.find((s) => s.id === e.target.value);
+                  if (!next || !profile) return;
+                  let resolution = "";
+                  if (next.isFinal && next.name.toLowerCase().includes("conclu"))
+                    resolution =
+                      window.prompt("Solução aplicada (obrigatória):") || "";
                   try {
-                    await acceptDemand(demand, profile);
+                    await changeDemandStatus(
+                      demand,
+                      next,
+                      profile,
+                      resolution,
+                      statusObservation,
+                    );
+                    setStatusObservation("");
+                    e.currentTarget.value = "";
                   } catch (err) {
                     setError(
                       err instanceof Error
                         ? err.message
-                        : "Não foi possível assumir a demanda.",
+                        : "Não foi possível atualizar",
                     );
                   }
                 }}
               >
-                Assumir demanda
-              </button>
-            )}
-            <select
-              aria-label="Alterar status"
-              defaultValue=""
-              onChange={async (e) => {
-                const next = statuses.find((s) => s.id === e.target.value);
-                if (!next || !profile) return;
-                let resolution = "";
-                if (next.isFinal && next.name.toLowerCase().includes("conclu"))
-                  resolution =
-                    window.prompt("Solução aplicada (obrigatória):") || "";
-                try {
-                  await changeDemandStatus(demand, next, profile, resolution);
-                } catch (err) {
-                  setError(
-                    err instanceof Error
-                      ? err.message
-                      : "Não foi possível atualizar",
-                  );
+                <option value="">Alterar status…</option>
+                {statuses
+                  .filter((s) => s.active)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                className="danger"
+                onClick={() =>
+                  profile &&
+                  softDeleteDemand(demand, profile, "Exclusão lógica solicitada")
                 }
-              }}
-            >
-              <option value="">Alterar status…</option>
-              {statuses
-                .filter((s) => s.active)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
-            <button
-              className="danger"
-              onClick={() =>
-                profile &&
-                softDeleteDemand(demand, profile, "Exclusão lógica solicitada")
-              }
-            >
-              Mover para lixeira
-            </button>
+              >
+                Mover para lixeira
+              </button>
+            </div>
           </div>
         )}
         {error && <p className="error">{error}</p>}
+      </section>
+      <section className="panel status-history">
+        <h2>Resumo por status</h2>
+        {history.filter((event) => event.type === "status").map((event) => (
+          <article className="status-history-item" key={event.id}>
+            <div>
+              <strong>{event.statusName || "Status atualizado"}</strong>
+              <small>
+                {event.authorName} ·{" "}
+                {event.createdAt?.toDate().toLocaleString("pt-BR") || "Agora"}
+              </small>
+            </div>
+            <p>{event.observation || "Sem observação registrada."}</p>
+          </article>
+        ))}
+        {!history.some((event) => event.type === "status") && (
+          <article className="status-history-item">
+            <div>
+              <strong>{current.name}</strong>
+              <small>Status atual</small>
+            </div>
+            <p>Sem observação registrada.</p>
+          </article>
+        )}
       </section>
     </Page>
   );
