@@ -276,6 +276,12 @@ export function DemandDetailPage() {
           <strong title={demand.companyName}>{demand.companyName}</strong>
         </div>
         <div className="demand-summary-item">
+          <span>Consultor</span>
+          <strong title={demand.consultantName || "Sem consultor"}>
+            {demand.consultantName || "Sem consultor"}
+          </strong>
+        </div>
+        <div className="demand-summary-item">
           <span>Setor</span>
           <strong>{demand.requesterSector || "—"}</strong>
         </div>
