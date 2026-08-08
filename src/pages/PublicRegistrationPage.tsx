@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Brand } from "../components/Brand";
 import { auth, db } from "../lib/firebase";
-import type { Company, Role } from "../types/models";
+import type { Company, Role, Sector } from "../types/models";
 
 type PublicBootstrap = { initialized?: boolean };
 
@@ -18,6 +18,8 @@ function errorText(error: unknown) {
 
 export function PublicRegistrationPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [requesterCompanyId, setRequesterCompanyId] = useState("");
   const [role, setRole] = useState<Role | null>(null);
   const [bootstrap, setBootstrap] = useState<PublicBootstrap>({ initialized: false });
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
@@ -32,11 +34,13 @@ export function PublicRegistrationPage() {
     (snapshot) => setCompanies(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Company).sort((a, b) => a.legalName.localeCompare(b.legalName, "pt-BR"))),
     () => setError("Não foi possível carregar as empresas."),
   ), []);
+  useEffect(() => onSnapshot(query(collection(db, "sectors"), where("active", "==", true)), (snapshot) => setSectors(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Sector))), []);
   useEffect(() => onSnapshot(doc(db, "publicConfig", "bootstrap"), (snapshot) => setBootstrap(snapshot.exists() ? snapshot.data() as PublicBootstrap : { initialized: false }), () => setBootstrap({ initialized: false })), []);
 
   function chooseRole(next: Role | null) {
     setRole(next);
     setSelectedCompanyIds([]);
+    setRequesterCompanyId("");
     setError("");
   }
 
@@ -115,9 +119,9 @@ export function PublicRegistrationPage() {
       <button className="profile-back" type="button" onClick={() => chooseRole(null)}>← Escolher outro perfil</button><h1>{title}</h1>
       <form onSubmit={submit}>
         <label>Nome completo<input name="name" required minLength={3} autoFocus/></label><label>E-mail<input name="email" type="email" required autoComplete="email"/></label>
-        {role === "requester" && <label>Empresa<select name="companyId" required defaultValue=""><option value="" disabled>Selecione uma empresa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.legalName}</option>)}</select></label>}
+        {role === "requester" && <label>Empresa<select name="companyId" required value={requesterCompanyId} onChange={(event) => setRequesterCompanyId(event.target.value)}><option value="" disabled>Selecione uma empresa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.legalName}</option>)}</select></label>}
         {role === "consultant" && <fieldset className="company-request-list"><legend>Empresas para as quais solicita acesso *</legend><p className="muted">A aprovação e o vínculo final serão definidos pelo administrador.</p>{companies.map((company) => <label key={company.id} className="check-row"><input type="checkbox" checked={selectedCompanyIds.includes(company.id)} onChange={() => toggleCompany(company.id)}/>{company.legalName}</label>)}</fieldset>}
-        {role === "requester" && <label>Setor padrão (opcional)<input name="defaultSector"/></label>}
+        {role === "requester" && <label>Setor padrão (opcional)<select name="defaultSector" defaultValue=""><option value="">Selecione um setor</option>{sectors.filter((sector) => sector.companyId === requesterCompanyId).map((sector) => <option key={sector.id} value={sector.name}>{sector.name}</option>)}</select></label>}
         {role !== "admin" && <label>Telefone (opcional)<input name="phone" type="tel"/></label>}
         <label>Senha<input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)}/></label><label>Confirmar senha<input type="password" required minLength={8} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)}/></label>
         {error && <p className="error" role="alert">{error}</p>}<button className="primary" disabled={saving || (role === "requester" && !companies.length)}>{saving ? "Enviando…" : role === "admin" ? "Configurar administrador" : "Enviar cadastro"}</button>

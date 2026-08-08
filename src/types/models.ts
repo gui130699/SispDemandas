@@ -80,6 +80,34 @@ export interface Company {
   address?: { zipCode?: string; street?: string; number?: string; complement?: string; neighborhood?: string; city?: string; state?: string };
 }
 
+export interface Sector {
+  id: string;
+  companyId: string;
+  companyName: string;
+  name: string;
+  nameNormalized: string;
+  active: boolean;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface SectorRequest {
+  id: string;
+  companyId: string;
+  companyName: string;
+  name: string;
+  nameNormalized: string;
+  requestedBy: string;
+  requestedByName: string;
+  requestedByRole: "consultant" | "requester";
+  status: "pending" | "approved" | "rejected";
+  requestedAt?: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  rejectionReason?: string | null;
+}
+
 export interface DemandStatus {
   id: string;
   name: string;

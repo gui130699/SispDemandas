@@ -24,6 +24,7 @@ import type {
   DemandHistoryEvent,
   DemandStatus,
   Priority,
+  Sector,
 } from "../types/models";
 import { elapsedDays } from "../utils/dates";
 import { Page } from "./DashboardPage";
@@ -142,6 +143,7 @@ export function DemandFormPage() {
   const { profile } = useAuth();
   const go = useNavigate();
   const [statuses, setStatuses] = useState<DemandStatus[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
   const [error, setError] = useState("");
   useEffect(
     () =>
@@ -154,6 +156,10 @@ export function DemandFormPage() {
       ),
     [],
   );
+  useEffect(
+    () => onSnapshot(query(collection(db, "sectors"), where("active", "==", true)), (snapshot) => setSectors(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Sector))),
+    [],
+  );
   if (profile?.role === "admin") {
     return (
       <Page title="Acesso restrito">
@@ -161,6 +167,7 @@ export function DemandFormPage() {
       </Page>
     );
   }
+  const availableSectors = sectors.filter((sector) => profile?.role !== "requester" || sector.companyId === profile.companyId);
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!profile) return;
@@ -217,7 +224,10 @@ export function DemandFormPage() {
         )}
         <label>
           Setor solicitante
-          <input name="sector" defaultValue={profile?.defaultSector ?? ""} />
+          <select name="sector" defaultValue="">
+            <option value="">Selecione um setor</option>
+            {availableSectors.map((sector) => <option key={sector.id} value={sector.name}>{profile?.role === "consultant" ? `${sector.name} — ${sector.companyName}` : sector.name}</option>)}
+          </select>
         </label>
         <label>
           Tela *<input name="screen" required />

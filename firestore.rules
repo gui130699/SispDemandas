@@ -102,6 +102,31 @@ service cloud.firestore {
     }
     match /uniqueCompanyKeys/{id} { allow read, write: if admin(); }
     match /levels/{id} { allow read: if active(); allow write: if admin(); }
+    match /sectors/{id} {
+      allow read: if active() && (admin() || sameCompany(resource.data.companyId) || consultantCompany(resource.data.companyId));
+      allow create, update: if admin();
+      allow delete: if false;
+    }
+    match /sectorRequests/{id} {
+      allow get: if active() && (admin() || resource.data.requestedBy == request.auth.uid);
+      allow list: if admin();
+      allow create: if active()
+        && (requester() || consultant())
+        && request.resource.data.keys().hasOnly(['id', 'companyId', 'companyName', 'name', 'nameNormalized', 'requestedBy', 'requestedByName', 'requestedByRole', 'status', 'requestedAt'])
+        && request.resource.data.id == id
+        && request.resource.data.requestedBy == request.auth.uid
+        && request.resource.data.requestedByName == profile().name
+        && request.resource.data.requestedByRole == profile().role
+        && request.resource.data.status == 'pending'
+        && request.resource.data.name is string
+        && request.resource.data.nameNormalized is string
+        && (sameCompany(request.resource.data.companyId) || consultantCompany(request.resource.data.companyId))
+        && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId))
+        && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active == true
+        && request.resource.data.companyName == get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.legalName;
+      allow update: if admin();
+      allow delete: if false;
+    }
     match /demandStatuses/{id} { allow read: if active(); allow write: if admin(); }
 
     // Counters and audit records are server-only. Cloud Functions use the
