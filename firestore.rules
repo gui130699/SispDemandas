@@ -7,6 +7,11 @@ service cloud.firestore {
     function admin() { return active() && profile().role == 'admin'; }
     function consultant() { return active() && profile().role == 'consultant'; }
     function requester() { return active() && profile().role == 'requester'; }
+    function consultantOwnCompanyLink(uid) {
+      return consultant() && uid == request.auth.uid
+        && request.resource.data.companyIds is list
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['companyIds', 'updatedAt']);
+    }
     function sameCompany(companyId) { return requester() && profile().companyId == companyId; }
     function consultantCompany(companyId) { return consultant() && companyId in profile().companyIds; }
     function assignedOrAvailable(demand) { return consultantCompany(demand.companyId) && (demand.consultantId == request.auth.uid || demand.consultantId == null); }
@@ -21,7 +26,7 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if active() && (admin() || uid == request.auth.uid);
       allow create: if admin() || validPendingRegistration() || (ownerCandidate() && uid == request.auth.uid && request.resource.data.role == 'admin' && request.resource.data.active == true && request.resource.data.registrationStatus == 'approved' && getAfter(/databases/$(database)/documents/bootstrapConfig/owner).data.initialized == true && getAfter(/databases/$(database)/documents/bootstrapConfig/owner).data.adminUid == request.auth.uid && getAfter(/databases/$(database)/documents/publicConfig/bootstrap).data.initialized == true);
-      allow update: if admin(); allow delete: if false;
+      allow update: if admin() || consultantOwnCompanyLink(uid); allow delete: if false;
     }
     match /companies/{id} { allow get, list: if active() || resource.data.active == true; allow create, update: if admin(); allow delete: if false; }
     match /uniqueCompanyKeys/{id} { allow read, write: if admin(); }

@@ -1,9 +1,10 @@
 import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
 import type { Company, Demand } from "../types/models";
+import { linkConsultantCompany } from "../services/users";
 import { elapsedDays } from "../utils/dates";
 
 export function DashboardPage() {
@@ -11,6 +12,9 @@ export function DashboardPage() {
   const [items, setItems] = useState<Demand[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [companyToLink, setCompanyToLink] = useState("");
+  const [linkingCompany, setLinkingCompany] = useState(false);
+  const [linkError, setLinkError] = useState("");
 
   useEffect(() => {
     if (profile?.role !== "consultant") {
@@ -22,18 +26,28 @@ export function DashboardPage() {
       (snapshot) =>
         setCompanies(
           snapshot.docs
-            .map((item) => ({ id: item.id, ...item.data() }) as Company)
-            .filter((company) => profile.companyIds?.includes(company.id)),
+            .map((item) => ({ id: item.id, ...item.data() }) as Company),
         ),
     );
   }, [profile]);
 
   useEffect(() => {
     if (profile?.role !== "consultant") return;
-    if (!selectedCompanyId || !profile.companyIds?.includes(selectedCompanyId)) {
+    if (!selectedCompanyId) {
       setSelectedCompanyId(profile.companyIds?.[0] ?? "");
     }
   }, [profile, selectedCompanyId]);
+
+  const linkedCompanies = useMemo(
+    () =>
+      companies.filter((company) => profile?.companyIds?.includes(company.id)),
+    [companies, profile?.companyIds],
+  );
+  const availableCompanies = useMemo(
+    () =>
+      companies.filter((company) => !profile?.companyIds?.includes(company.id)),
+    [companies, profile?.companyIds],
+  );
 
   useEffect(() => {
     if (!profile) return;
@@ -94,10 +108,10 @@ export function DashboardPage() {
             <select
               value={selectedCompanyId}
               onChange={(event) => setSelectedCompanyId(event.target.value)}
-              disabled={!companies.length}
+              disabled={!linkedCompanies.length}
             >
-              {!companies.length && <option value="">Nenhuma empresa vinculada</option>}
-              {companies.map((company) => (
+              {!linkedCompanies.length && <option value="">Nenhuma empresa vinculada</option>}
+              {linkedCompanies.map((company) => (
                 <option key={company.id} value={company.id}>
                   {company.legalName}
                 </option>
@@ -105,7 +119,54 @@ export function DashboardPage() {
             </select>
           </label>
         )}
+        {profile?.role === "consultant" && (
+          <div className="dashboard-company-link">
+            <select
+              aria-label="Empresa para vincular"
+              value={companyToLink}
+              onChange={(event) => setCompanyToLink(event.target.value)}
+              disabled={!availableCompanies.length || linkingCompany}
+            >
+              <option value="">
+                {availableCompanies.length
+                  ? "Vincular outra empresa"
+                  : "Todas as empresas estão vinculadas"}
+              </option>
+              {availableCompanies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.legalName}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="primary"
+              disabled={!companyToLink || linkingCompany}
+              onClick={async () => {
+                if (!profile || !companyToLink) return;
+                setLinkError("");
+                setLinkingCompany(true);
+                try {
+                  await linkConsultantCompany(profile, companyToLink);
+                  setSelectedCompanyId(companyToLink);
+                  setCompanyToLink("");
+                } catch (error) {
+                  setLinkError(
+                    error instanceof Error
+                      ? error.message
+                      : "Não foi possível vincular a empresa.",
+                  );
+                } finally {
+                  setLinkingCompany(false);
+                }
+              }}
+            >
+              {linkingCompany ? "Vinculando…" : "Vincular empresa"}
+            </button>
+          </div>
+        )}
       </div>
+      {linkError && <p className="error">{linkError}</p>}
       <div className="cards">
         {cards.map(([label, value]) => (
           <Link

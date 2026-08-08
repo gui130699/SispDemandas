@@ -17,6 +17,14 @@ export async function changeDemandStatus(demand: Demand, status: DemandStatus, u
   const patch = { status: status.legacyKeys?.[0] ?? "analysis", statusId: status.id, statusName: status.name, statusColor: status.color, statusUpdatedAt: serverTimestamp(), updatedBy: user.uid, updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp(), ...(status.name.toLowerCase().includes("execu") ? { startedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("paus") ? { pausedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("conclu") ? { completedAt: serverTimestamp(), completedBy: user.uid, resolution: resolution!.trim() } : {}) };
   await updateDoc(doc(db, "demands", demand.id), patch); await addDoc(collection(db, "demands", demand.id, "history"), { type: "status", statusId: status.id, statusName: status.name, authorId: user.uid, authorName: user.name, createdAt: serverTimestamp() }); await audit(user, "status", "demand", demand.id, demand.companyId, undefined, { statusId: status.id });
 }
+export async function acceptDemand(demand: Demand, consultant: UserProfile) {
+  if (consultant.role !== "consultant") throw new Error("Apenas consultores podem assumir demandas.");
+  if (demand.consultantId) throw new Error("Esta demanda já possui um consultor.");
+  if (!consultant.companyIds?.includes(demand.companyId)) throw new Error("Vincule-se à empresa antes de assumir esta demanda.");
+  await updateDoc(doc(db, "demands", demand.id), { consultantId: consultant.uid, consultantName: consultant.name, updatedBy: consultant.uid, updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp() });
+  await addDoc(collection(db, "demands", demand.id, "history"), { type: "assignment", consultantId: consultant.uid, consultantName: consultant.name, authorId: consultant.uid, authorName: consultant.name, createdAt: serverTimestamp() });
+  await audit(consultant, "accept", "demand", demand.id, demand.companyId, { consultantId: null }, { consultantId: consultant.uid });
+}
 
 export async function softDeleteDemand(demand: Demand, user: UserProfile, reason: string) { await updateDoc(doc(db, "demands", demand.id), { deletedAt: serverTimestamp(), deletedBy: user.uid, deleteReason: reason.trim(), updatedAt: serverTimestamp() }); await audit(user, "trash", "demand", demand.id, demand.companyId, undefined, { reason }); }
 export async function restoreDemand(demand: Demand, user: UserProfile) { await updateDoc(doc(db, "demands", demand.id), { deletedAt: null, deletedBy: null, deleteReason: null, updatedAt: serverTimestamp() }); await audit(user, "restore", "demand", demand.id, demand.companyId); }

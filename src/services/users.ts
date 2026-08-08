@@ -4,7 +4,7 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { arrayUnion, doc, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { auth, db, secondaryAuth } from "../lib/firebase";
 import type { Role, UserProfile } from "../types/models";
 import { audit } from "./audit";
@@ -129,6 +129,19 @@ export async function setUserActive(
 
 export const resendPasswordSetup = (email: string) =>
   sendPasswordResetEmail(auth, email.trim().toLowerCase());
+
+export async function linkConsultantCompany(
+  consultant: UserProfile,
+  companyId: string,
+) {
+  if (consultant.role !== "consultant") {
+    throw new Error("Apenas consultores podem vincular empresas.");
+  }
+  await updateDoc(doc(db, "users", consultant.uid), {
+    companyIds: arrayUnion(companyId),
+    updatedAt: serverTimestamp(),
+  });
+}
 
 export function userCreationError(error: unknown) {
   const code =

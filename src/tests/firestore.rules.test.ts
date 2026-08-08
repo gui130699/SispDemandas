@@ -15,8 +15,10 @@ describe("contrato das regras do Firestore", () => {
     expect(rules).toContain("getAfter(/databases/$(database)/documents/publicConfig/bootstrap).data.initialized == true");
     expect(rules).toContain("request.resource.data.role == 'admin'");
   });
-  it("protege consultores por empresa e mantém atualizações de perfil administrativas", () => {
+  it("protege consultores por empresa e limita o vínculo próprio de empresas", () => {
     expect(rules).toContain("companyId in profile().companyIds");
-    expect(rules).toContain("allow update: if admin();");
+    expect(rules).toContain("function consultantOwnCompanyLink(uid)");
+    expect(rules).toContain("affectedKeys().hasOnly(['companyIds', 'updatedAt'])");
+    expect(rules).toContain("allow update: if admin() || consultantOwnCompanyLink(uid);");
   });
 });

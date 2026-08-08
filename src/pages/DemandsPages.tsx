@@ -13,6 +13,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import {
   changeDemandStatus,
   createDemand,
+  acceptDemand,
   softDeleteDemand,
 } from "../services/demands";
 import { resolveStatus } from "../services/statuses";
@@ -303,6 +304,25 @@ export function DemandDetailPage() {
       <section className="demand-controls">
         {canManage && (
           <div className="actions demand-actions">
+            {profile?.role === "consultant" && !demand.consultantId && (
+              <button
+                type="button"
+                className="primary"
+                onClick={async () => {
+                  try {
+                    await acceptDemand(demand, profile);
+                  } catch (err) {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Não foi possível assumir a demanda.",
+                    );
+                  }
+                }}
+              >
+                Assumir demanda
+              </button>
+            )}
             <select
               aria-label="Alterar status"
               defaultValue=""
