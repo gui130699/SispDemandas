@@ -194,6 +194,7 @@ export function DemandFormPage() {
           companyId: profile.companyId || String(f.get("companyId")),
           requesterSector: String(f.get("sector") || ""),
         },
+        profile,
       );
       go(`/demandas/${id}`);
     } catch (err) {
