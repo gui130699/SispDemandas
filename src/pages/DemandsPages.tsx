@@ -100,9 +100,11 @@ export function DemandsPage() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
-        <Link className="primary dashboard-primary-action" to="/demandas/nova">
-          Nova demanda
-        </Link>
+        {profile?.role !== "admin" && (
+          <Link className="primary dashboard-primary-action" to="/demandas/nova">
+            Nova demanda
+          </Link>
+        )}
       </div>
       <div className="table-wrap">
         <table>
@@ -154,6 +156,13 @@ export function DemandFormPage() {
       ),
     [],
   );
+  if (profile?.role === "admin") {
+    return (
+      <Page title="Acesso restrito">
+        <p>Administradores podem apenas visualizar ou mover demandas para a lixeira.</p>
+      </Page>
+    );
+  }
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!profile) return;
