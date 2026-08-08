@@ -7,6 +7,8 @@
   --text: #14233a;
   --muted: #617087;
   --line: #dbe3ed;
+  --border: #dbe3ed;
+  --surface-alt: #f4f8fc;
   --blue: #123c73;
   --dark: #07162d;
   --danger: #b42318;
@@ -17,6 +19,8 @@ html[data-theme="dark"] {
   --text: #edf5ff;
   --muted: #9aa8bc;
   --line: #253347;
+  --border: #253347;
+  --surface-alt: #182338;
   --blue: #4285d4;
 }
 * {
@@ -35,6 +39,39 @@ select {
 }
 button {
   cursor: pointer;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 680;
+  line-height: 1.2;
+  box-shadow: 0 1px 2px #07162d0b;
+  transition: transform .16s ease, background .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+button:hover:not(:disabled) {
+  background: var(--surface-alt);
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  box-shadow: 0 5px 14px #07162d14;
+  transform: translateY(-1px);
+}
+button:active:not(:disabled) {
+  box-shadow: none;
+  transform: translateY(0);
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--blue) 32%, transparent);
+  outline-offset: 2px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+  box-shadow: none;
 }
 a {
   color: var(--blue);
@@ -128,10 +165,17 @@ header small {
   flex: 1;
 }
 .icon {
-  border: 0;
+  min-width: 40px;
+  padding: 8px 10px;
+  border-color: transparent;
   background: transparent;
   color: var(--text);
-  padding: 8px;
+  box-shadow: none;
+}
+.icon:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--surface-alt);
+  box-shadow: none;
 }
 .online {
   font-size: 13px;
@@ -209,10 +253,23 @@ header small {
 .primary {
   background: linear-gradient(135deg, #123c73, #4285d4);
   color: #fff;
-  border: 0;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-weight: 650;
+  border-color: #123c73;
+  box-shadow: 0 6px 16px #123c7338;
+}
+.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0d2f5d, #2e6fb8);
+  border-color: #0d2f5d;
+  box-shadow: 0 10px 22px #123c7344;
+}
+.danger {
+  color: #fff;
+  border-color: #b42318;
+  background: linear-gradient(135deg, #b42318, #dc4b3e);
+  box-shadow: 0 5px 14px #b4231828;
+}
+.danger:hover:not(:disabled) {
+  border-color: #8f1c14;
+  background: linear-gradient(135deg, #8f1c14, #c83a2e);
 }
 .table-wrap {
   overflow: auto;
@@ -334,6 +391,10 @@ dd {
   gap: 7px;
 }
 .row-actions button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .badge.active {
@@ -488,6 +549,8 @@ dd {
   .toolbar {
     flex-wrap: wrap;
   }
+  button { min-height: 42px; }
+  .row-actions { flex-wrap: wrap; }
   .toolbar input {
     min-width: 100%;
   }
