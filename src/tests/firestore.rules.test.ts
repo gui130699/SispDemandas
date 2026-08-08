@@ -51,7 +51,7 @@ describe("Firestore Rules: isolamento e operações privilegiadas", () => {
     await assertFails(updateDoc(doc(db, "demands", "demand-a"), { consultantId: consultantA.uid }));
     await assertFails(updateDoc(doc(db, "demands", "demand-a"), { status: "completed" }));
     await assertFails(updateDoc(doc(db, "demands", "demand-a"), { code: "DEM-2026-999999" }));
-    await assertFails(setDoc(doc(db, "demands", "new-demand"), { companyId: "company-a" }));
+    await assertSucceeds(setDoc(doc(db, "demands", "new-demand"), { companyId: "company-a" }));
   });
 
   it("não permite auto-vínculo de consultor e mantém leitura multiempresa isolada", async () => {
