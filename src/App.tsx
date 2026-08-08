@@ -13,11 +13,11 @@ import {
   DemandDetailPage,
 } from "./pages/DemandsPages";
 import {
-  CompaniesPage,
   UsersPage,
   LevelsPage,
   AuditPage,
 } from "./pages/AdminPages";
+import { CompaniesManagementPage } from "./pages/CompaniesManagementPage";
 function Protected() {
   const { loading, profile } = useAuth();
   if (loading) return <div className="center">Carregando sessão…</div>;
@@ -39,7 +39,7 @@ export default function App() {
             <Route path="demandas" element={<DemandsPage />} />
             <Route path="demandas/nova" element={<DemandFormPage />} />
             <Route path="demandas/:id" element={<DemandDetailPage />} />
-            <Route path="empresas" element={<CompaniesPage />} />
+            <Route path="empresas" element={<CompaniesManagementPage />} />
             <Route path="usuarios" element={<UsersPage />} />
             <Route path="aprovacoes" element={<ApprovalsPage />} />
             <Route path="status" element={<StatusesPage />} />
