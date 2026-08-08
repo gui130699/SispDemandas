@@ -1,6 +1,5 @@
 {
   "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
   "storage": { "rules": "storage.rules" },
-  "functions": [{ "source": "functions", "codebase": "default" }],
   "emulators": { "firestore": { "port": 8080 }, "ui": { "enabled": false } }
 }

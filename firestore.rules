@@ -146,23 +146,24 @@ service cloud.firestore {
 
     match /demands/{id} {
       allow read: if active() && canReadDemand(resource.data);
-      // Creation and operational updates are callable-Function only. This
-      // prevents browser clients from choosing codes, companies or statuses.
-      allow create: if false;
-      allow update: if admin() && immutableDemandFields();
+      // Spark-plan mode: direct writes remain limited to the owning company
+      // or an authorized consultant. Server-side privileged workflows are not
+      // enabled until Cloud Functions can be deployed.
+      allow create: if active() && ((requester() && request.resource.data.companyId == profile().companyId) || consultantCompany(request.resource.data.companyId));
+      allow update: if immutableDemandFields() && (admin() || sameCompany(resource.data.companyId) || (consultantCompany(resource.data.companyId) && (resource.data.consultantId == request.auth.uid || resource.data.consultantId == null)));
       allow delete: if false;
 
       match /publicNotes/{note} {
         allow read: if active() && canReadDemand(get(/databases/$(database)/documents/demands/$(id)).data);
-        allow write: if false;
+        allow create: if active() && canReadDemand(get(/databases/$(database)/documents/demands/$(id)).data); allow update, delete: if false;
       }
       match /internalNotes/{note} {
         allow read: if active() && (admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId));
-        allow write: if false;
+        allow create: if consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false;
       }
       match /history/{event} {
         allow read: if active() && canReadDemand(get(/databases/$(database)/documents/demands/$(id)).data);
-        allow write: if false;
+        allow create: if consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false;
       }
       match /attachments/{attachmentId} {
         allow read: if active() && canReadDemand(get(/databases/$(database)/documents/demands/$(id)).data);

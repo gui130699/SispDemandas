@@ -1,61 +1,12 @@
-import { httpsCallable } from "firebase/functions";
-import { functions } from "../lib/firebase";
+import { addDoc, collection, doc, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { normalizeText } from "../utils/normalization";
 import type { Demand, DemandStatus, Priority, UserProfile } from "../types/models";
 
-const createDemandCall = httpsCallable<
-  { title: string; description: string; screenName: string; formName: string; levelId: string; levelName: string; priority: Priority; companyId: string; requesterSector?: string },
-  { demandId: string; code: string }
->(functions, "createDemandSecure");
-
-const mutateDemandCall = httpsCallable<
-  { demandId: string; action: string; statusId?: string; observation?: string; workflowStatusIds?: string[]; text?: string; internal?: boolean },
-  { ok: true }
->(functions, "mutateDemandSecure");
-
-function callableMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-  if (message.includes("functions/not-found")) return "A atualização segura ainda não foi publicada no Firebase. Solicite o deploy das Functions.";
-  if (message.includes("permission-denied")) return "Você não possui permissão para esta ação.";
-  return message || "Não foi possível concluir a operação.";
-}
-
-export async function createDemand(
-  data: { title: string; description: string; screenName: string; formName: string; levelId: string; levelName: string; priority: Priority; companyId: string; requesterSector?: string },
-) {
-  try {
-    return (await createDemandCall(data)).data.demandId;
-  } catch (error) {
-    throw new Error(callableMessage(error));
-  }
-}
-
-export async function changeDemandStatus(demand: Demand, status: DemandStatus, _user: UserProfile, observation?: string) {
-  try {
-    await mutateDemandCall({ demandId: demand.id, action: "status", statusId: status.id, observation: observation?.trim() ?? "" });
-  } catch (error) { throw new Error(callableMessage(error)); }
-}
-
-export async function saveStatusObservation(demand: Demand, _user: UserProfile, observation: string) {
-  // An observation is a public activity note. It no longer edits history
-  // documents directly from the browser.
-  return addNote(demand.id, _user, observation, false);
-}
-
-export async function editStatusObservation(_demand: Demand, _historyId: string, _user: UserProfile, _observation: string) {
-  throw new Error("A edição de histórico será disponibilizada pela operação segura do servidor.");
-}
-
-export async function acceptDemand(demand: Demand, _consultant: UserProfile, workflowStatusIds: string[]) {
-  try { await mutateDemandCall({ demandId: demand.id, action: "accept", workflowStatusIds }); }
-  catch (error) { throw new Error(callableMessage(error)); }
-}
-
-export async function updateDemandWorkflowStatuses(demand: Demand, _consultant: UserProfile, workflowStatusIds: string[]) {
-  try { await mutateDemandCall({ demandId: demand.id, action: "workflow", workflowStatusIds }); }
-  catch (error) { throw new Error(callableMessage(error)); }
-}
-
-export async function addNote(id: string, _user: UserProfile, text: string, internal: boolean) {
-  try { await mutateDemandCall({ demandId: id, action: "note", text: text.trim(), internal }); }
-  catch (error) { throw new Error(callableMessage(error)); }
-}
+export async function createDemand(data:{title:string;description:string;screenName:string;formName:string;levelId:string;levelName:string;priority:Priority;companyId:string;requesterSector?:string},user:UserProfile,_initial?:DemandStatus){if(user.role==="requester"&&user.companyId!==data.companyId)throw new Error("Empresa inválida.");const ref=doc(collection(db,"demands"));const code=`DEM-${new Date().getFullYear()}-${ref.id.slice(0,6).toUpperCase()}`;await setDoc(ref,{...data,id:ref.id,code,sequence:null,year:new Date().getFullYear(),companyName:user.companyName??"Empresa",requesterId:user.uid,requesterName:user.name,requesterSector:data.requesterSector??"",screenNameNormalized:normalizeText(data.screenName),formNameNormalized:normalizeText(data.formName),status:"analysis",statusId:null,statusName:"Em análise",statusColor:"#3b82f6",consultantId:null,consultantName:null,createdBy:user.uid,updatedBy:user.uid,createdAt:serverTimestamp(),updatedAt:serverTimestamp(),lastActivityAt:serverTimestamp(),schemaVersion:2});return ref.id;}
+export async function changeDemandStatus(demand:Demand,status:DemandStatus,user:UserProfile,observation?:string){if(!observation?.trim())throw new Error("Informe uma observação.");const history=doc(collection(db,"demands",demand.id,"history"));const batch=writeBatch(db);batch.update(doc(db,"demands",demand.id),{status:status.legacyKeys?.[0]??"analysis",statusId:status.id,statusName:status.name,statusColor:status.color,statusHistoryId:history.id,statusUpdatedAt:serverTimestamp(),updatedBy:user.uid,updatedAt:serverTimestamp(),lastActivityAt:serverTimestamp()});batch.set(history,{type:"status",statusId:status.id,statusName:status.name,observation:observation.trim(),authorId:user.uid,authorName:user.name,createdAt:serverTimestamp()});await batch.commit();}
+export async function saveStatusObservation(demand:Demand,user:UserProfile,observation:string){return addNote(demand.id,user,observation,false)}
+export async function editStatusObservation(_demand?:Demand,_historyId?:string,_user?:UserProfile,_observation?:string){throw new Error("Edição de histórico indisponível no plano gratuito.")}
+export async function acceptDemand(demand:Demand,consultant:UserProfile,workflowStatusIds:string[]){if(!consultant.companyIds?.includes(demand.companyId))throw new Error("Você não possui acesso a esta empresa.");await updateDoc(doc(db,"demands",demand.id),{consultantId:consultant.uid,consultantName:consultant.name,workflowStatusIds:[...new Set(workflowStatusIds)],updatedBy:consultant.uid,updatedAt:serverTimestamp(),lastActivityAt:serverTimestamp()})}
+export async function updateDemandWorkflowStatuses(demand:Demand,consultant:UserProfile,workflowStatusIds:string[]){await updateDoc(doc(db,"demands",demand.id),{workflowStatusIds:[...new Set(workflowStatusIds)],updatedBy:consultant.uid,updatedAt:serverTimestamp()})}
+export async function addNote(id:string,user:UserProfile,text:string,internal:boolean){if(!text.trim())throw new Error("Informe a observação.");await addDoc(collection(db,"demands",id,internal?"internalNotes":"publicNotes"),{text:text.trim(),authorId:user.uid,authorName:user.name,authorRole:user.role,createdAt:serverTimestamp(),edited:false})}
