@@ -108,6 +108,43 @@ export interface SectorRequest {
   rejectionReason?: string | null;
 }
 
+export interface CompanyAccess {
+  id: string;
+  companyId: string;
+  companyName: string;
+  userId: string;
+  userName: string;
+  consultantAccess: boolean;
+  projectManagerAccess: boolean;
+  active: boolean;
+  grantedAt?: Timestamp;
+  grantedBy?: string;
+  grantedByName?: string;
+  projectManagerGrantedAt?: Timestamp;
+  projectManagerGrantedBy?: string;
+  projectManagerRemovedAt?: Timestamp;
+  projectManagerRemovedBy?: string;
+  updatedAt?: Timestamp;
+}
+
+export interface ProjectManagerRequest {
+  id: string;
+  consultantId: string;
+  consultantName: string;
+  consultantEmail: string;
+  requestedCompanyIds: string[];
+  requestedCompanies: { id: string; name: string }[];
+  reason?: string;
+  status: "pending" | "approved" | "partially_approved" | "rejected" | "cancelled";
+  requestedAt?: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  approvedCompanyIds?: string[];
+  rejectedCompanyIds?: string[];
+  rejectionReason?: string | null;
+}
+
 export interface DemandStatus {
   id: string;
   name: string;

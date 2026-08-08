@@ -127,6 +127,16 @@ service cloud.firestore {
       allow update: if admin();
       allow delete: if false;
     }
+    match /companyAccess/{id} {
+      allow get: if active() && (admin() || resource.data.userId == request.auth.uid);
+      allow list: if admin();
+      allow create, update, delete: if false;
+    }
+    match /projectManagerRequests/{id} {
+      allow get: if active() && (admin() || resource.data.consultantId == request.auth.uid);
+      allow list: if admin();
+      allow create, update, delete: if false;
+    }
     match /demandStatuses/{id} { allow read: if active(); allow write: if admin(); }
 
     // Counters and audit records are server-only. Cloud Functions use the

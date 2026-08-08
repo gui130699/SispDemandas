@@ -241,6 +241,45 @@ export const reviewConsultantCompanyRequest = onCall({ region: "southamerica-eas
   return { ok: true };
 });
 
+export const requestProjectManagerAccess = onCall({ region: "southamerica-east1" }, async (request) => {
+  if (!request.auth) fail("unauthenticated", "Entre para solicitar a função.");
+  const actor = await caller(request.auth.uid);
+  if (actor.role !== "consultant") fail("permission-denied", "Somente consultores podem solicitar a função.");
+  const rawCompanyIds: unknown[] = Array.isArray(request.data?.companyIds) ? request.data.companyIds : [];
+  const companyIds: string[] = [...new Set(rawCompanyIds.filter((value): value is string => typeof value === "string"))];
+  const reason = String(request.data?.reason ?? "").trim();
+  if (!companyIds.length || !companyIds.every((id) => actor.companyIds?.includes(id))) fail("permission-denied", "Selecione apenas empresas às quais você já possui acesso como consultor.");
+  const companies = await Promise.all(companyIds.map((id) => db.doc(`companies/${id}`).get()));
+  if (companies.some((company) => !company.exists || company.data()?.active !== true)) fail("failed-precondition", "Uma das empresas selecionadas não está ativa.");
+  const ref = db.collection("projectManagerRequests").doc();
+  await ref.set({ id: ref.id, consultantId: request.auth.uid, consultantName: actor.name, consultantEmail: request.auth.token.email ?? "", requestedCompanyIds: companyIds, requestedCompanies: companies.map((company) => ({ id: company.id, name: company.data()?.legalName ?? "Empresa" })), reason, status: "pending", requestedAt: FieldValue.serverTimestamp() });
+  await writeAudit({ action: "PROJECT_MANAGER_REQUESTED", entityType: "projectManagerRequest", entityId: ref.id, actorId: request.auth.uid, actor, after: { companyIds } });
+  return { requestId: ref.id };
+});
+
+export const approveProjectManagerRequest = onCall({ region: "southamerica-east1" }, async (request) => {
+  if (!request.auth) fail("unauthenticated", "Entre para revisar solicitações.");
+  const actor = await caller(request.auth.uid);
+  if (actor.role !== "admin") fail("permission-denied", "Apenas administradores podem aprovar gerentes.");
+  const requestId = String(request.data?.requestId ?? "");
+  const approvedCompanyIds = Array.isArray(request.data?.approvedCompanyIds) ? [...new Set(request.data.approvedCompanyIds.filter((value: unknown): value is string => typeof value === "string"))] : [];
+  const requestRef = db.doc(`projectManagerRequests/${requestId}`);
+  await db.runTransaction(async (transaction) => {
+    const pending = await transaction.get(requestRef);
+    if (!pending.exists || pending.data()?.status !== "pending") fail("failed-precondition", "Solicitação indisponível para revisão.");
+    const data = pending.data()!;
+    if (!approvedCompanyIds.every((id) => data.requestedCompanyIds.includes(id))) fail("invalid-argument", "Empresa fora da solicitação.");
+    for (const companyId of approvedCompanyIds) {
+      const company = (data.requestedCompanies as { id: string; name: string }[]).find((item) => item.id === companyId);
+      transaction.set(db.doc(`companyAccess/${companyId}_${data.consultantId}`), { id: `${companyId}_${data.consultantId}`, companyId, companyName: company?.name ?? "Empresa", userId: data.consultantId, userName: data.consultantName, consultantAccess: true, projectManagerAccess: true, active: true, grantedAt: FieldValue.serverTimestamp(), grantedBy: request.auth!.uid, grantedByName: actor.name, projectManagerGrantedAt: FieldValue.serverTimestamp(), projectManagerGrantedBy: request.auth!.uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    const rejectedCompanyIds = data.requestedCompanyIds.filter((id: string) => !approvedCompanyIds.includes(id));
+    transaction.update(requestRef, { status: approvedCompanyIds.length === data.requestedCompanyIds.length ? "approved" : approvedCompanyIds.length ? "partially_approved" : "rejected", approvedCompanyIds, rejectedCompanyIds, reviewedAt: FieldValue.serverTimestamp(), reviewedBy: request.auth!.uid, reviewedByName: actor.name });
+  });
+  await writeAudit({ action: "PROJECT_MANAGER_APPROVED", entityType: "projectManagerRequest", entityId: requestId, actorId: request.auth.uid, actor, after: { approvedCompanyIds } });
+  return { ok: true };
+});
+
 /** Server-side audit for administrative writes that are still made directly by admins. */
 export const auditAdministrativeWrite = onDocumentWritten(
   { region: "southamerica-east1", document: "{collectionId}/{documentId}" },
