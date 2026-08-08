@@ -408,6 +408,39 @@ header small {
   color: var(--muted);
   font-size: 12px;
 }
+.status-report-edit {
+  min-height: 30px;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--blue);
+  font-size: 12px;
+}
+.status-report-edit:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: none;
+  transform: none;
+}
+.status-report-editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 9px;
+}
+.status-report-editor textarea {
+  min-height: 64px;
+  margin: 0;
+}
+.status-report-editor > div {
+  display: flex;
+  gap: 8px;
+}
+.status-report-editor > div button {
+  min-height: 34px;
+  padding: 6px 11px;
+}
 .status-report-line details {
   margin-top: 8px;
 }

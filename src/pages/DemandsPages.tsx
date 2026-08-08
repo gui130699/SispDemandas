@@ -14,6 +14,8 @@ import {
   changeDemandStatus,
   createDemand,
   acceptDemand,
+  editStatusObservation,
+  saveStatusObservation,
   softDeleteDemand,
 } from "../services/demands";
 import { resolveStatus } from "../services/statuses";
@@ -241,6 +243,9 @@ export function DemandDetailPage() {
   const [statuses, setStatuses] = useState<DemandStatus[]>([]);
   const [history, setHistory] = useState<DemandHistoryEvent[]>([]);
   const [statusObservation, setStatusObservation] = useState("");
+  const [savingObservation, setSavingObservation] = useState(false);
+  const [editingHistoryId, setEditingHistoryId] = useState("");
+  const [editingObservation, setEditingObservation] = useState("");
   const [error, setError] = useState("");
   useEffect(
     () =>
@@ -249,6 +254,12 @@ export function DemandDetailPage() {
       ),
     [id],
   );
+  useEffect(() => {
+    const currentEvent = history.find(
+      (event) => event.id === demand?.statusHistoryId,
+    );
+    if (currentEvent) setStatusObservation(currentEvent.observation ?? "");
+  }, [demand?.statusHistoryId, history]);
   useEffect(
     () =>
       onSnapshot(
@@ -364,6 +375,13 @@ export function DemandDetailPage() {
                 onChange={async (e) => {
                   const next = statuses.find((s) => s.id === e.target.value);
                   if (!next || !profile) return;
+                  if (next.id === demand.statusId) {
+                    setError(
+                      "Este já é o status atual. Use “Salvar observação” para atualizá-la.",
+                    );
+                    e.currentTarget.value = "";
+                    return;
+                  }
                   try {
                     await changeDemandStatus(
                       demand,
@@ -391,6 +409,33 @@ export function DemandDetailPage() {
                     </option>
                   ))}
               </select>
+              <button
+                type="button"
+                className="primary"
+                disabled={!statusObservation.trim() || savingObservation}
+                onClick={async () => {
+                  if (!profile) return;
+                  setSavingObservation(true);
+                  setError("");
+                  try {
+                    await saveStatusObservation(
+                      demand,
+                      profile,
+                      statusObservation,
+                    );
+                  } catch (err) {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Não foi possível salvar a observação.",
+                    );
+                  } finally {
+                    setSavingObservation(false);
+                  }
+                }}
+              >
+                {savingObservation ? "Salvando…" : "Salvar observação"}
+              </button>
               <button
                 className="danger"
                 onClick={() =>
@@ -422,6 +467,64 @@ export function DemandDetailPage() {
                     {latest.createdAt?.toDate().toLocaleString("pt-BR") || "Agora"}
                   </small>
                 </p>
+                {canManage && (
+                  <button
+                    type="button"
+                    className="status-report-edit"
+                    onClick={() => {
+                      setEditingHistoryId(latest.id);
+                      setEditingObservation(latest.observation ?? "");
+                    }}
+                  >
+                    Editar observação
+                  </button>
+                )}
+                {editingHistoryId === latest.id && (
+                  <div className="status-report-editor">
+                    <textarea
+                      aria-label={`Editar observação de ${latest.statusName}`}
+                      rows={2}
+                      value={editingObservation}
+                      onChange={(event) =>
+                        setEditingObservation(event.target.value)
+                      }
+                    />
+                    <div>
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={!editingObservation.trim()}
+                        onClick={async () => {
+                          if (!profile) return;
+                          try {
+                            await editStatusObservation(
+                              demand,
+                              latest.id,
+                              profile,
+                              editingObservation,
+                            );
+                            setEditingHistoryId("");
+                            setError("");
+                          } catch (err) {
+                            setError(
+                              err instanceof Error
+                                ? err.message
+                                : "Não foi possível editar a observação.",
+                            );
+                          }
+                        }}
+                      >
+                        Salvar edição
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingHistoryId("")}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {!!previousEvents.length && (
                   <details>
                     <summary>

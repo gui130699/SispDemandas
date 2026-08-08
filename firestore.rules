@@ -12,6 +12,14 @@ service cloud.firestore {
         && request.resource.data.companyIds is list
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['companyIds', 'updatedAt']);
     }
+    function canManageDemand(demandId) {
+      return admin() || assignedOrAvailable(get(/databases/$(database)/documents/demands/$(demandId)).data);
+    }
+    function canEditStatusObservation(demandId) {
+      return canManageDemand(demandId)
+        && request.resource.data.observation is string
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['observation', 'edited', 'updatedAt', 'updatedBy', 'updatedByName']);
+    }
     function sameCompany(companyId) { return requester() && profile().companyId == companyId; }
     function consultantCompany(companyId) { return consultant() && companyId in profile().companyIds; }
     function assignedOrAvailable(demand) { return consultantCompany(demand.companyId) && (demand.consultantId == request.auth.uid || demand.consultantId == null); }
@@ -40,7 +48,7 @@ service cloud.firestore {
       allow delete: if false;
       match /publicNotes/{note} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if active(); allow update, delete: if false; }
       match /internalNotes/{note} { allow read, create: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false; }
-      match /history/{event} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update, delete: if false; }
+      match /history/{event} { allow read: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId) || sameCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow create: if admin() || consultantCompany(get(/databases/$(database)/documents/demands/$(id)).data.companyId); allow update: if canEditStatusObservation(id); allow delete: if false; }
     }
     match /notifications/{id} { allow read: if active() && (admin() || resource.data.userId == request.auth.uid); allow create: if admin(); allow update: if active() && resource.data.userId == request.auth.uid; allow delete: if false; }
     match /auditLogs/{id} { allow read: if admin(); allow create: if active(); allow update, delete: if false; }

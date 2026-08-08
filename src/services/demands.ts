@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, runTransaction, serverTimestamp, updateDoc } from "firebase/firestore";
+import { addDoc, collection, doc, runTransaction, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { normalizeText } from "../utils/normalization";
 import type { Demand, DemandStatus, Priority, UserProfile } from "../types/models";
@@ -6,16 +6,31 @@ import { audit } from "./audit";
 
 export async function createDemand(data: { title: string; description: string; screenName: string; formName: string; levelId: string; levelName: string; priority: Priority; companyId: string; companyName: string; requesterSector?: string }, user: UserProfile, initialStatus: DemandStatus) {
   if (user.role === "requester" && user.companyId !== data.companyId) throw new Error("Empresa inválida.");
-  const ref = doc(collection(db, "demands")); let code = "";
+  const ref = doc(collection(db, "demands")), historyRef = doc(collection(ref, "history")); let code = "";
   await runTransaction(db, async tx => { const counter = doc(db, "counters", "demands"), snapshot = await tx.get(counter), sequence = (snapshot.data()?.sequence ?? 0) + 1, year = new Date().getFullYear(); code = `DEM-${year}-${String(sequence).padStart(6, "0")}`;
-    tx.set(counter, { sequence, updatedAt: serverTimestamp() }); tx.set(ref, { ...data, id: ref.id, code, sequence, year, requesterId: user.uid, requesterName: user.name, requesterSector: data.requesterSector ?? user.defaultSector ?? "", screenNameNormalized: normalizeText(data.screenName), formNameNormalized: normalizeText(data.formName), status: "analysis", statusId: initialStatus.id, statusName: initialStatus.name, statusColor: initialStatus.color, statusUpdatedAt: serverTimestamp(), consultantId: null, consultantName: null, executionApprovedAt: null, completedAt: null, deletedAt: null, createdBy: user.uid, updatedBy: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp(), attachmentCount: 0, publicNoteCount: 0, internalNoteCount: 0, schemaVersion: 2 }); tx.set(doc(collection(ref, "history")), { type: "status", statusId: initialStatus.id, statusName: initialStatus.name, observation: "Demanda registrada.", authorId: user.uid, authorName: user.name, createdAt: serverTimestamp() });
+    tx.set(counter, { sequence, updatedAt: serverTimestamp() }); tx.set(ref, { ...data, id: ref.id, code, sequence, year, requesterId: user.uid, requesterName: user.name, requesterSector: data.requesterSector ?? user.defaultSector ?? "", screenNameNormalized: normalizeText(data.screenName), formNameNormalized: normalizeText(data.formName), status: "analysis", statusId: initialStatus.id, statusName: initialStatus.name, statusColor: initialStatus.color, statusUpdatedAt: serverTimestamp(), statusHistoryId: historyRef.id, consultantId: null, consultantName: null, executionApprovedAt: null, completedAt: null, deletedAt: null, createdBy: user.uid, updatedBy: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp(), attachmentCount: 0, publicNoteCount: 0, internalNoteCount: 0, schemaVersion: 2 }); tx.set(historyRef, { type: "status", statusId: initialStatus.id, statusName: initialStatus.name, observation: "Demanda registrada.", authorId: user.uid, authorName: user.name, createdAt: serverTimestamp() });
   }); await audit(user, "create", "demand", ref.id, data.companyId, undefined, { code }); return ref.id;
 }
 
 export async function changeDemandStatus(demand: Demand, status: DemandStatus, user: UserProfile, observation?: string) {
   if (!observation?.trim()) throw new Error("Informe uma observação sobre a alteração de status.");
-  const patch = { status: status.legacyKeys?.[0] ?? "analysis", statusId: status.id, statusName: status.name, statusColor: status.color, statusUpdatedAt: serverTimestamp(), updatedBy: user.uid, updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp(), ...(status.name.toLowerCase().includes("execu") ? { startedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("paus") ? { pausedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("conclu") ? { completedAt: serverTimestamp(), completedBy: user.uid } : {}) };
-  await updateDoc(doc(db, "demands", demand.id), patch); await addDoc(collection(db, "demands", demand.id, "history"), { type: "status", statusId: status.id, statusName: status.name, observation: observation.trim(), authorId: user.uid, authorName: user.name, createdAt: serverTimestamp() }); await audit(user, "status", "demand", demand.id, demand.companyId, undefined, { statusId: status.id, observation: observation.trim() });
+  const historyRef = doc(collection(db, "demands", demand.id, "history"));
+  const patch = { status: status.legacyKeys?.[0] ?? "analysis", statusId: status.id, statusName: status.name, statusColor: status.color, statusUpdatedAt: serverTimestamp(), statusHistoryId: historyRef.id, updatedBy: user.uid, updatedAt: serverTimestamp(), lastActivityAt: serverTimestamp(), ...(status.name.toLowerCase().includes("execu") ? { startedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("paus") ? { pausedAt: serverTimestamp() } : {}), ...(status.name.toLowerCase().includes("conclu") ? { completedAt: serverTimestamp(), completedBy: user.uid } : {}) };
+  const batch = writeBatch(db); batch.update(doc(db, "demands", demand.id), patch); batch.set(historyRef, { type: "status", statusId: status.id, statusName: status.name, observation: observation.trim(), authorId: user.uid, authorName: user.name, createdAt: serverTimestamp() }); await batch.commit(); await audit(user, "status", "demand", demand.id, demand.companyId, undefined, { statusId: status.id, observation: observation.trim() });
+}
+export async function saveStatusObservation(demand: Demand, user: UserProfile, observation: string) {
+  if (!observation.trim()) throw new Error("Informe uma observação antes de salvar.");
+  const demandRef = doc(db, "demands", demand.id);
+  if (demand.statusHistoryId) {
+    await updateDoc(doc(demandRef, "history", demand.statusHistoryId), { observation: observation.trim(), edited: true, updatedAt: serverTimestamp(), updatedBy: user.uid, updatedByName: user.name });
+  } else {
+    const historyRef = doc(collection(demandRef, "history"));
+    const batch = writeBatch(db); batch.update(demandRef, { statusHistoryId: historyRef.id, updatedAt: serverTimestamp(), updatedBy: user.uid, lastActivityAt: serverTimestamp() }); batch.set(historyRef, { type: "status", statusId: demand.statusId ?? demand.status, statusName: demand.statusName ?? demand.status, observation: observation.trim(), authorId: user.uid, authorName: user.name, createdAt: serverTimestamp() }); await batch.commit();
+  }
+}
+export async function editStatusObservation(demand: Demand, historyId: string, user: UserProfile, observation: string) {
+  if (!observation.trim()) throw new Error("Informe uma observação antes de salvar.");
+  await updateDoc(doc(db, "demands", demand.id, "history", historyId), { observation: observation.trim(), edited: true, updatedAt: serverTimestamp(), updatedBy: user.uid, updatedByName: user.name });
 }
 export async function acceptDemand(demand: Demand, consultant: UserProfile) {
   if (consultant.role !== "consultant") throw new Error("Apenas consultores podem assumir demandas.");
