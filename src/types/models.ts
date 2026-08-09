@@ -49,6 +49,7 @@ export interface UserProfile {
   companyId: string | null;
   companyName?: string | null;
   companyIds?: string[];
+  projectManagerCompanyIds?: string[];
   requestedCompanyIds?: string[];
   permissions?: ConsultantPermissions;
   defaultSector?: string;
@@ -77,6 +78,10 @@ export interface Company {
   contactName?: string;
   notes?: string;
   active: boolean;
+  projectManagerId?: string | null;
+  projectManagerName?: string | null;
+  projectManagerAssignedAt?: Timestamp | null;
+  projectManagerAssignedBy?: string | null;
   address?: { zipCode?: string; street?: string; number?: string; complement?: string; neighborhood?: string; city?: string; state?: string };
 }
 
@@ -149,16 +154,14 @@ export interface ProjectManagerRequest {
   consultantId: string;
   consultantName: string;
   consultantEmail: string;
-  requestedCompanyIds: string[];
-  requestedCompanies: { id: string; name: string }[];
+  companyId: string;
+  companyName: string;
   reason?: string;
-  status: "pending" | "approved" | "partially_approved" | "rejected" | "cancelled";
+  status: "pending" | "approved" | "rejected";
   requestedAt?: Timestamp;
   reviewedAt?: Timestamp;
   reviewedBy?: string;
   reviewedByName?: string;
-  approvedCompanyIds?: string[];
-  rejectedCompanyIds?: string[];
   rejectionReason?: string | null;
 }
 

@@ -11,6 +11,11 @@ service cloud.firestore {
     function consultantCompany(companyId) {
       return consultant() && profile().companyIds is list && companyId in profile().companyIds;
     }
+    function projectManagerCompany(companyId) {
+      return consultantCompany(companyId)
+        && exists(/databases/$(database)/documents/companies/$(companyId))
+        && get(/databases/$(database)/documents/companies/$(companyId)).data.projectManagerId == request.auth.uid;
+    }
     function ownsDemand(demand) { return sameCompany(demand.companyId); }
     function canReadDemand(demand) { return admin() || ownsDemand(demand) || consultantCompany(demand.companyId); }
     function ownerCandidate() {
@@ -93,6 +98,17 @@ service cloud.firestore {
       allow update: if admin();
       allow delete: if false;
     }
+    function validDemandConsultant() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['consultantId', 'consultantName'])
+        || (request.resource.data.consultantId == null && request.resource.data.consultantName == null)
+        || (request.resource.data.consultantId is string
+          && exists(/databases/$(database)/documents/users/$(request.resource.data.consultantId))
+          && get(/databases/$(database)/documents/users/$(request.resource.data.consultantId)).data.role == 'consultant'
+          && get(/databases/$(database)/documents/users/$(request.resource.data.consultantId)).data.active == true
+          && get(/databases/$(database)/documents/users/$(request.resource.data.consultantId)).data.companyIds is list
+          && resource.data.companyId in get(/databases/$(database)/documents/users/$(request.resource.data.consultantId)).data.companyIds
+          && request.resource.data.consultantName == get(/databases/$(database)/documents/users/$(request.resource.data.consultantId)).data.name);
+    }
 
     match /companyRegistrationRequests/{requestId} {
       allow get: if active() && (admin() || resource.data.requestedBy == request.auth.uid);
@@ -159,14 +175,33 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /companyAccess/{id} {
-      allow get: if active() && (admin() || resource.data.userId == request.auth.uid);
-      allow list: if admin();
-      allow create, update, delete: if false;
+      allow get: if active() && (admin() || resource.data.userId == request.auth.uid || projectManagerCompany(resource.data.companyId));
+      allow list: if active() && (admin() || projectManagerCompany(resource.data.companyId));
+      allow create, update: if admin();
+      allow delete: if false;
     }
     match /projectManagerRequests/{id} {
       allow get: if active() && (admin() || resource.data.consultantId == request.auth.uid);
-      allow list: if admin();
-      allow create, update, delete: if false;
+      allow list: if active() && (admin() || resource.data.consultantId == request.auth.uid);
+      allow create: if consultant()
+        && request.resource.data.keys().hasOnly([
+          'id', 'consultantId', 'consultantName', 'consultantEmail',
+          'companyId', 'companyName', 'reason', 'status', 'requestedAt'
+        ])
+        && request.resource.data.id == id
+        && request.resource.data.consultantId == request.auth.uid
+        && request.resource.data.consultantName == profile().name
+        && request.resource.data.consultantEmail == profile().email
+        && request.resource.data.companyId is string
+        && request.resource.data.companyId in profile().companyIds
+        && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId))
+        && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active == true
+        && (!('projectManagerId' in get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data)
+          || get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.projectManagerId == null)
+        && request.resource.data.companyName == get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.legalName
+        && request.resource.data.status == 'pending';
+      allow update: if admin();
+      allow delete: if false;
     }
     match /demandStatuses/{id} { allow read: if active(); allow write: if admin(); }
 
@@ -185,7 +220,9 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId))
         && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active == true
         && request.resource.data.companyName == get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.legalName;
-      allow update: if immutableDemandFields() && (admin() || (consultantCompany(resource.data.companyId) && (resource.data.consultantId == request.auth.uid || resource.data.consultantId == null)));
+      allow update: if immutableDemandFields()
+        && validDemandConsultant()
+        && (admin() || projectManagerCompany(resource.data.companyId) || (consultantCompany(resource.data.companyId) && (resource.data.consultantId == request.auth.uid || resource.data.consultantId == null)));
       allow delete: if false;
 
       match /publicNotes/{note} {

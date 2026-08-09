@@ -369,7 +369,8 @@ export function DemandDetailPage() {
       </Page>
   );
   const current = resolveStatus(demand, statuses);
-  const canManageStatus = profile?.role === "consultant";
+  const isProjectManager = profile?.role === "consultant" && profile.projectManagerCompanyIds?.includes(demand.companyId);
+  const canManageStatus = profile?.role === "consultant" && (isProjectManager || !demand.consultantId || demand.consultantId === profile.uid);
   const defaultWorkflowStatusIds = statuses
     .filter((status) =>
       status.legacyKeys?.some((key) =>
@@ -402,7 +403,7 @@ export function DemandDetailPage() {
   const canReopen =
     canManageStatus && demand.status === "cancelled" && Boolean(analysisStatus);
   const canConfigureWorkflow =
-    profile?.role === "consultant" && demand.consultantId === profile.uid;
+    profile?.role === "consultant" && (isProjectManager || demand.consultantId === profile.uid);
   const statusGroups = history
     .filter((event) => event.type === "status")
     .reduce((groups, event) => {

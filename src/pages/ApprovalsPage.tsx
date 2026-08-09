@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../features/auth/AuthContext";
 import { db } from "../lib/firebase";
 import { approveCompanyRegistrationRequest, rejectCompanyRegistrationRequest } from "../services/companies";
+import { approveProjectManagerRequest, rejectProjectManagerRequest } from "../services/projectManagement";
 import { approveRegistration, rejectRegistration, reviewConsultantCompanyAccess } from "../services/users";
-import type { Company, CompanyRegistrationRequest, ConsultantCompanyRequest, UserProfile } from "../types/models";
+import type { Company, CompanyRegistrationRequest, ConsultantCompanyRequest, ProjectManagerRequest, UserProfile } from "../types/models";
 import { Page } from "./DashboardPage";
 
 type RegistrationDialog = { user: UserProfile; mode: "approve" | "reject" } | null;
@@ -14,10 +15,12 @@ export function ApprovalsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [accessRequests, setAccessRequests] = useState<ConsultantCompanyRequest[]>([]);
   const [companyRequests, setCompanyRequests] = useState<CompanyRegistrationRequest[]>([]);
+  const [managerRequests, setManagerRequests] = useState<ProjectManagerRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [dialog, setDialog] = useState<RegistrationDialog>(null);
   const [accessRequestToReject, setAccessRequestToReject] = useState<ConsultantCompanyRequest | null>(null);
   const [companyRequestToReject, setCompanyRequestToReject] = useState<CompanyRegistrationRequest | null>(null);
+  const [managerRequestToReject, setManagerRequestToReject] = useState<ProjectManagerRequest | null>(null);
   const [approvedCompanyIds, setApprovedCompanyIds] = useState<string[]>([]);
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
@@ -52,6 +55,17 @@ export function ApprovalsPage() {
         .map((item) => ({ id: item.id, ...item.data() }) as CompanyRegistrationRequest)
         .sort((a, b) => (a.requestedAt?.toMillis() ?? 0) - (b.requestedAt?.toMillis() ?? 0))),
       () => setMessage("Não foi possível carregar as solicitações de cadastro de empresas."),
+    );
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    return onSnapshot(
+      query(collection(db, "projectManagerRequests"), where("status", "==", "pending")),
+      (snapshot) => setManagerRequests(snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }) as ProjectManagerRequest)
+        .sort((a, b) => (a.requestedAt?.toMillis() ?? 0) - (b.requestedAt?.toMillis() ?? 0))),
+      () => setMessage("Não foi possível carregar as solicitações de gerência."),
     );
   }, [isAdmin]);
 
@@ -109,7 +123,19 @@ export function ApprovalsPage() {
     }
   }
 
-  const pendingTotal = users.length + accessRequests.length + companyRequests.length;
+  async function approveManager(request: ProjectManagerRequest) {
+    setSaving(true);
+    try {
+      await approveProjectManagerRequest(request, administrator);
+      setMessage(`${request.consultantName} agora é gerente de ${request.companyName}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível aprovar o gerente.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const pendingTotal = users.length + accessRequests.length + companyRequests.length + managerRequests.length;
 
   return (
     <Page title="Aprovações" subtitle={`${pendingTotal} item(ns) aguardando revisão`}>
@@ -117,6 +143,7 @@ export function ApprovalsPage() {
         <div className="card"><small>Cadastros pendentes</small><strong>{users.length}</strong></div>
         <div className="card"><small>Solicitações de acesso</small><strong>{accessRequests.length}</strong></div>
         <div className="card"><small>Novas empresas</small><strong>{companyRequests.length}</strong></div>
+        <div className="card"><small>Gerentes de projeto</small><strong>{managerRequests.length}</strong></div>
       </div>
       {message && <p className="notice" role="status">{message}</p>}
 
@@ -148,11 +175,30 @@ export function ApprovalsPage() {
             <tbody>{accessRequests.map((item) => (
               <tr key={item.id}>
                 <td>{item.consultantName}</td><td>{item.companyName}</td><td>{item.requestedAt?.toDate().toLocaleString("pt-BR") || "Agora"}</td>
-                <td><div className="row-actions"><button className="primary notranslate" translate="no" type="button" onClick={async () => { try { await reviewConsultantCompanyAccess(item.id, "approved"); setMessage("Acesso à empresa aprovado."); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível aprovar."); } }}>Aprovar</button><button className="danger" type="button" onClick={() => { setAccessRequestToReject(item); setReason(""); }}>Rejeitar</button></div></td>
+                <td><div className="row-actions"><button className="primary notranslate" translate="no" type="button" onClick={async () => { try { await reviewConsultantCompanyAccess(item.id, "approved", administrator); setMessage("Acesso à empresa aprovado."); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível aprovar."); } }}>Aprovar</button><button className="danger" type="button" onClick={() => { setAccessRequestToReject(item); setReason(""); }}>Rejeitar</button></div></td>
               </tr>
             ))}</tbody>
           </table>
           {!accessRequests.length && <p className="empty">Não há solicitações de acesso pendentes.</p>}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Solicitações de gerente de projeto</h2>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Consultor</th><th>Empresa</th><th>Justificativa</th><th>Solicitada em</th><th>Ações</th></tr></thead>
+            <tbody>{managerRequests.map((item) => (
+              <tr key={item.id}>
+                <td>{item.consultantName}<small>{item.consultantEmail}</small></td>
+                <td>{item.companyName}</td>
+                <td>{item.reason || "—"}</td>
+                <td>{item.requestedAt?.toDate().toLocaleString("pt-BR") || "Agora"}</td>
+                <td><div className="row-actions"><button className="primary notranslate" translate="no" type="button" disabled={saving} onClick={() => approveManager(item)}>Aprovar</button><button className="danger" type="button" disabled={saving} onClick={() => { setManagerRequestToReject(item); setReason(""); }}>Rejeitar</button></div></td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {!managerRequests.length && <p className="empty">Não há solicitações de gerência pendentes.</p>}
         </div>
       </section>
 
@@ -194,7 +240,7 @@ export function ApprovalsPage() {
             <div className="demand-description-modal-header"><h2 id="access-rejection-title">Rejeitar solicitação de acesso</h2><button className="demand-description-close" type="button" aria-label="Fechar" onClick={() => setAccessRequestToReject(null)}>×</button></div>
             <p>{accessRequestToReject.consultantName} · {accessRequestToReject.companyName}</p>
             <label>Motivo da rejeição *<textarea rows={4} value={reason} onChange={(event) => setReason(event.target.value)} autoFocus /></label>
-            <div className="actions"><button className="danger" type="button" disabled={saving || !reason.trim()} onClick={async () => { setSaving(true); try { await reviewConsultantCompanyAccess(accessRequestToReject.id, "rejected", reason); setMessage("Solicitação rejeitada."); setAccessRequestToReject(null); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível rejeitar."); } finally { setSaving(false); } }}>Confirmar rejeição</button><button type="button" disabled={saving} onClick={() => setAccessRequestToReject(null)}>Cancelar</button></div>
+            <div className="actions"><button className="danger" type="button" disabled={saving || !reason.trim()} onClick={async () => { setSaving(true); try { await reviewConsultantCompanyAccess(accessRequestToReject.id, "rejected", administrator, reason); setMessage("Solicitação rejeitada."); setAccessRequestToReject(null); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível rejeitar."); } finally { setSaving(false); } }}>Confirmar rejeição</button><button type="button" disabled={saving} onClick={() => setAccessRequestToReject(null)}>Cancelar</button></div>
           </section>
         </div>
       )}
@@ -206,6 +252,17 @@ export function ApprovalsPage() {
             <p><strong>{companyRequestToReject.company.legalName}</strong><br />Solicitada por {companyRequestToReject.requestedByName}</p>
             <label>Motivo da rejeição *<textarea rows={4} value={reason} onChange={(event) => setReason(event.target.value)} autoFocus /></label>
             <div className="actions"><button className="danger" type="button" disabled={saving || !reason.trim()} onClick={async () => { setSaving(true); try { await rejectCompanyRegistrationRequest(companyRequestToReject, administrator, reason); setMessage("Solicitação de cadastro rejeitada."); setCompanyRequestToReject(null); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível rejeitar a empresa."); } finally { setSaving(false); } }}>Confirmar rejeição</button><button type="button" disabled={saving} onClick={() => setCompanyRequestToReject(null)}>Cancelar</button></div>
+          </section>
+        </div>
+      )}
+
+      {managerRequestToReject && (
+        <div className="demand-description-modal-backdrop" onMouseDown={() => !saving && setManagerRequestToReject(null)}>
+          <section className="demand-description-modal" role="dialog" aria-modal="true" aria-labelledby="manager-rejection-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="demand-description-modal-header"><h2 id="manager-rejection-title">Rejeitar solicitação de gerência</h2><button className="demand-description-close" type="button" aria-label="Fechar" onClick={() => setManagerRequestToReject(null)}>×</button></div>
+            <p><strong>{managerRequestToReject.consultantName}</strong><br />Empresa: {managerRequestToReject.companyName}</p>
+            <label>Motivo da rejeição *<textarea rows={4} value={reason} onChange={(event) => setReason(event.target.value)} autoFocus /></label>
+            <div className="actions"><button className="danger" type="button" disabled={saving || !reason.trim()} onClick={async () => { setSaving(true); try { await rejectProjectManagerRequest(managerRequestToReject, administrator, reason); setMessage("Solicitação de gerência rejeitada."); setManagerRequestToReject(null); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível rejeitar a solicitação."); } finally { setSaving(false); } }}>Confirmar rejeição</button><button type="button" disabled={saving} onClick={() => setManagerRequestToReject(null)}>Cancelar</button></div>
           </section>
         </div>
       )}

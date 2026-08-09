@@ -4,9 +4,8 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { auth, db, functions, secondaryAuth } from "../lib/firebase";
+import { arrayUnion, doc, runTransaction, serverTimestamp, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { auth, db, secondaryAuth } from "../lib/firebase";
 import { defaultConsultantPermissions, type Company, type Role, type UserProfile } from "../types/models";
 import { audit } from "./audit";
 
@@ -97,6 +96,13 @@ export async function approveRegistration(user: UserProfile, admin: UserProfile,
     approvedAt: serverTimestamp(), approvedBy: admin.uid, approvedByName: admin.name,
   });
   batch.set(doc(db, "notifications", `${user.uid}_${Date.now()}`), { userId: user.uid, title: "Cadastro aprovado", message: "Seu acesso ao SISPDEMANDAS foi liberado.", read: false, createdAt: serverTimestamp() });
+  if (user.role === "consultant") {
+    cleanCompanyIds.forEach((companyId) => batch.set(doc(db, "companyAccess", `${companyId}_${user.uid}`), {
+      id: `${companyId}_${user.uid}`, companyId, companyName: "", userId: user.uid, userName: user.name,
+      consultantAccess: true, projectManagerAccess: false, active: true,
+      grantedAt: serverTimestamp(), grantedBy: admin.uid, grantedByName: admin.name, updatedAt: serverTimestamp(),
+    }, { merge: true }));
+  }
   await batch.commit();
   await audit(admin, "approve", "user", user.uid, user.companyId, { registrationStatus: "pending" }, { registrationStatus: "approved" });
 }
@@ -107,7 +113,16 @@ export async function rejectRegistration(user: UserProfile, admin: UserProfile, 
 }
 
 export async function updateConsultantAccess(user: UserProfile, admin: UserProfile, companyIds: string[], permissions: NonNullable<UserProfile["permissions"]>) {
-  await updateDoc(doc(db, "users", user.uid), { companyIds: [...new Set(companyIds)], permissions, updatedAt: serverTimestamp(), updatedBy: admin.uid });
+  const cleanCompanyIds = [...new Set(companyIds)];
+  const batch = writeBatch(db);
+  batch.update(doc(db, "users", user.uid), { companyIds: cleanCompanyIds, permissions, updatedAt: serverTimestamp(), updatedBy: admin.uid });
+  [...new Set([...(user.companyIds ?? []), ...cleanCompanyIds])].forEach((companyId) => batch.set(doc(db, "companyAccess", `${companyId}_${user.uid}`), {
+    id: `${companyId}_${user.uid}`, companyId, companyName: "", userId: user.uid, userName: user.name,
+    consultantAccess: cleanCompanyIds.includes(companyId), active: cleanCompanyIds.includes(companyId) && user.active,
+    projectManagerAccess: user.projectManagerCompanyIds?.includes(companyId) ?? false,
+    updatedAt: serverTimestamp(),
+  }, { merge: true }));
+  await batch.commit();
   await audit(admin, "update_access", "user", user.uid, undefined, undefined, { companyIds, permissions });
 }
 
@@ -116,11 +131,26 @@ export async function setUserActive(
   active: boolean,
   admin: UserProfile,
 ) {
-  await updateDoc(doc(db, "users", user.uid), {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "users", user.uid), {
     active,
     updatedAt: serverTimestamp(),
     updatedBy: admin.uid,
   });
+  if (user.role === "consultant") {
+    (user.companyIds ?? []).forEach((companyId) => batch.set(doc(db, "companyAccess", `${companyId}_${user.uid}`), {
+      id: `${companyId}_${user.uid}`,
+      companyId,
+      companyName: "",
+      userId: user.uid,
+      userName: user.name,
+      consultantAccess: true,
+      projectManagerAccess: user.projectManagerCompanyIds?.includes(companyId) ?? false,
+      active,
+      updatedAt: serverTimestamp(),
+    }, { merge: true }));
+  }
+  await batch.commit();
   await audit(
     admin,
     active ? "activate" : "deactivate",
@@ -147,10 +177,35 @@ export async function requestConsultantCompanyAccess(consultant: UserProfile, co
   });
 }
 
-const reviewCompanyRequest = httpsCallable<{ requestId: string; decision: "approved" | "rejected"; rejectionReason?: string }, { ok: true }>(functions, "reviewConsultantCompanyRequest");
-export async function reviewConsultantCompanyAccess(requestId: string, decision: "approved" | "rejected", rejectionReason?: string) {
-  try { await reviewCompanyRequest({ requestId, decision, rejectionReason }); }
-  catch (error) { throw new Error(error instanceof Error && error.message.includes("functions/not-found") ? "A Function de revisão ainda não foi publicada no Firebase." : "Não foi possível revisar a solicitação."); }
+export async function reviewConsultantCompanyAccess(requestId: string, decision: "approved" | "rejected", admin: UserProfile, rejectionReason?: string) {
+  if (admin.role !== "admin") throw new Error("Apenas administradores podem revisar solicitações.");
+  const requestRef = doc(db, "consultantCompanyRequests", requestId);
+  await runTransaction(db, async (transaction) => {
+    const requestSnapshot = await transaction.get(requestRef);
+    if (!requestSnapshot.exists() || requestSnapshot.data().status !== "pending") throw new Error("Esta solicitação já foi revisada.");
+    const request = requestSnapshot.data();
+    const userRef = doc(db, "users", request.consultantId);
+    const companyRef = doc(db, "companies", request.companyId);
+    const [userSnapshot, companySnapshot] = await Promise.all([transaction.get(userRef), transaction.get(companyRef)]);
+    if (!userSnapshot.exists() || userSnapshot.data().role !== "consultant") throw new Error("Consultor não encontrado.");
+    if (!companySnapshot.exists() || companySnapshot.data().active !== true) throw new Error("Empresa indisponível.");
+    if (decision === "approved") {
+      transaction.update(userRef, { companyIds: arrayUnion(request.companyId), updatedAt: serverTimestamp(), updatedBy: admin.uid });
+      transaction.set(doc(db, "companyAccess", `${request.companyId}_${request.consultantId}`), {
+        id: `${request.companyId}_${request.consultantId}`, companyId: request.companyId, companyName: request.companyName,
+        userId: request.consultantId, userName: request.consultantName, consultantAccess: true,
+        projectManagerAccess: false, active: true, grantedAt: serverTimestamp(), grantedBy: admin.uid,
+        grantedByName: admin.name, updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }
+    transaction.update(requestRef, {
+      status: decision,
+      reviewedAt: serverTimestamp(),
+      reviewedBy: admin.uid,
+      reviewedByName: admin.name,
+      rejectionReason: decision === "rejected" ? rejectionReason?.trim() || "Solicitação não aprovada." : null,
+    });
+  });
 }
 
 export function userCreationError(error: unknown) {

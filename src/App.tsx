@@ -19,6 +19,7 @@ import {
 } from "./pages/AdminPages";
 import { CompaniesManagementPage } from "./pages/CompaniesManagementPage";
 import { SectorsPage } from "./pages/SectorsPage";
+import { ProjectManagementPage } from "./pages/ProjectManagementPage";
 function Protected() {
   const { loading, profile } = useAuth();
   if (loading) return <div className="center">Carregando sessão…</div>;
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="aprovacoes" element={<ApprovalsPage />} />
             <Route path="status" element={<StatusesPage />} />
             <Route path="setores" element={<SectorsPage />} />
+            <Route path="gerencia" element={<ProjectManagementPage />} />
             <Route path="niveis" element={<LevelsPage />} />
             <Route path="auditoria" element={<AuditPage />} />
           </Route>
