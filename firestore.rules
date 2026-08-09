@@ -94,6 +94,37 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /companyRegistrationRequests/{requestId} {
+      allow get: if active() && (admin() || resource.data.requestedBy == request.auth.uid);
+      allow list: if active() && (admin() || resource.data.requestedBy == request.auth.uid);
+      allow create: if consultant()
+        && request.resource.data.keys().hasOnly([
+          'id', 'requestedBy', 'requestedByName', 'requestedByEmail',
+          'company', 'status', 'requestedAt'
+        ])
+        && request.resource.data.id == requestId
+        && request.resource.data.requestedBy == request.auth.uid
+        && request.resource.data.requestedByName == profile().name
+        && request.resource.data.requestedByEmail == profile().email
+        && request.resource.data.status == 'pending'
+        && request.resource.data.company is map
+        && request.resource.data.company.keys().hasOnly([
+          'legalName', 'tradeName', 'cnpj', 'phone', 'email', 'contactName',
+          'notes', 'active', 'address'
+        ])
+        && request.resource.data.company.legalName is string
+        && request.resource.data.company.legalName.size() >= 2
+        && request.resource.data.company.cnpj is string
+        && (request.resource.data.company.cnpj.size() == 0 || request.resource.data.company.cnpj.size() == 14)
+        && request.resource.data.company.active == true
+        && request.resource.data.company.address is map
+        && request.resource.data.company.address.keys().hasOnly([
+          'zipCode', 'street', 'number', 'complement', 'neighborhood', 'city', 'state'
+        ]);
+      allow update: if admin();
+      allow delete: if false;
+    }
+
     match /companies/{id} {
       allow get: if active() || resource.data.active == true;
       allow list: if active() || resource.data.active == true;

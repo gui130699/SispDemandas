@@ -1,16 +1,225 @@
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { useEffect, useState, type FormEvent } from "react";
-import { db } from "../lib/firebase";
+import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "../features/auth/AuthContext";
-import { lookupCompanyByCnpj, saveCompany } from "../services/companies";
-import type { Company } from "../types/models";
+import { db } from "../lib/firebase";
+import {
+  lookupCompanyByCnpj,
+  requestCompanyRegistration,
+  saveCompany,
+  type CompanyInput,
+} from "../services/companies";
+import type { Company, CompanyRegistrationRequest } from "../types/models";
 import { Page } from "./DashboardPage";
 
+const requestStatusLabels: Record<CompanyRegistrationRequest["status"], string> = {
+  pending: "Pendente",
+  approved: "Aprovada",
+  rejected: "Rejeitada",
+};
+
+function companyInput(data: FormData): CompanyInput {
+  return {
+    legalName: String(data.get("legalName") || "").trim(),
+    tradeName: String(data.get("tradeName") || "").trim(),
+    cnpj: String(data.get("cnpj") || ""),
+    phone: String(data.get("phone") || "").trim(),
+    email: String(data.get("email") || "").trim(),
+    contactName: String(data.get("contactName") || "").trim(),
+    notes: String(data.get("notes") || "").trim(),
+    active: true,
+    address: {
+      zipCode: String(data.get("zipCode") || ""),
+      street: String(data.get("street") || ""),
+      number: String(data.get("number") || ""),
+      complement: String(data.get("complement") || ""),
+      neighborhood: String(data.get("neighborhood") || ""),
+      city: String(data.get("city") || ""),
+      state: String(data.get("state") || ""),
+    },
+  };
+}
+
 export function CompaniesManagementPage() {
-  const { profile } = useAuth(); const [items,setItems]=useState<Company[]>([]),[showForm,setShowForm]=useState(false),[saving,setSaving]=useState(false),[lookupLoading,setLookupLoading]=useState(false),[message,setMessage]=useState("");
-  useEffect(()=>onSnapshot(query(collection(db,"companies"),orderBy("legalName")),snapshot=>setItems(snapshot.docs.map(item=>({id:item.id,...item.data()}) as Company))),[]);
-  async function lookup(form:HTMLFormElement){const cnpj=String(new FormData(form).get("cnpj")||"");setLookupLoading(true);setMessage("");try{const company=await lookupCompanyByCnpj(cnpj);const set=(name:string,value:string|undefined|null)=>{const input=form.elements.namedItem(name) as HTMLInputElement|null;if(input&&value)input.value=value};set("cnpj",company.cnpj);set("legalName",company.razao_social);set("tradeName",company.nome_fantasia);set("phone",company.ddd_telefone_1);set("email",company.email);set("zipCode",company.cep);set("street",company.logradouro);set("number",company.numero);set("complement",company.complemento);set("neighborhood",company.bairro);set("city",company.municipio);set("state",company.uf);setMessage(`Dados de ${company.razao_social} preenchidos pela BrasilAPI. Revise antes de salvar.`)}catch(error){setMessage(error instanceof Error?error.message:"Não foi possível consultar o CNPJ.")}finally{setLookupLoading(false)}}
-  async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=event.currentTarget,data=new FormData(form);setSaving(true);setMessage("");try{await saveCompany({legalName:String(data.get("legalName")).trim(),tradeName:String(data.get("tradeName")||"").trim(),cnpj:String(data.get("cnpj")||""),phone:String(data.get("phone")||"").trim(),email:String(data.get("email")||"").trim(),contactName:String(data.get("contactName")||"").trim(),notes:String(data.get("notes")||"").trim(),active:true,address:{zipCode:String(data.get("zipCode")||""),street:String(data.get("street")||""),number:String(data.get("number")||""),complement:String(data.get("complement")||""),neighborhood:String(data.get("neighborhood")||""),city:String(data.get("city")||""),state:String(data.get("state")||"")}});form.reset();setShowForm(false);setMessage("Empresa cadastrada com sucesso.")}catch(error){setMessage(error instanceof Error?error.message:"Não foi possível cadastrar a empresa.")}finally{setSaving(false)}}
-  if(profile?.role!=="admin")return <Page title="Acesso negado"><p>Área exclusiva de administradores.</p></Page>;
-  return <Page title="Empresas" subtitle={`${items.length} empresa(s) cadastrada(s)`}><div className="toolbar"><p className="muted">Consulte o CNPJ para preencher os dados automaticamente.</p><button className="primary" onClick={()=>setShowForm(value=>!value)}>{showForm?"Fechar":"Nova empresa"}</button></div>{showForm&&<form className="form-grid panel" onSubmit={submit}><label>CNPJ<input name="cnpj" inputMode="numeric" placeholder="Somente números" onBlur={event=>lookup(event.currentTarget.form!)}/></label><div className="actions"><button type="button" disabled={lookupLoading} onClick={event=>lookup(event.currentTarget.form!)}>{lookupLoading?"Consultando…":"Preencher pelo CNPJ"}</button></div><label>Razão social *<input name="legalName" required/></label><label>Nome fantasia<input name="tradeName"/></label><label>Telefone<input name="phone"/></label><label>E-mail<input name="email" type="email"/></label><label>Contato<input name="contactName"/></label><label>CEP<input name="zipCode"/></label><label>Logradouro<input name="street"/></label><label>Número<input name="number"/></label><label>Complemento<input name="complement"/></label><label>Bairro<input name="neighborhood"/></label><label>Cidade<input name="city"/></label><label>UF<input name="state" maxLength={2}/></label><label className="wide">Observações<textarea name="notes" rows={3}/></label>{message&&<p className="notice wide">{message}</p>}<div className="actions wide"><button className="primary" disabled={saving}>{saving?"Salvando…":"Salvar empresa"}</button></div></form>}{!showForm&&message&&<p className="notice">{message}</p>}<div className="table-wrap"><table><thead><tr><th>Razão social</th><th>CNPJ</th><th>Cidade/UF</th><th>Status</th></tr></thead><tbody>{items.map(company=><tr key={company.id}><td>{company.legalName}</td><td>{company.cnpj||"—"}</td><td>{[company.address?.city,company.address?.state].filter(Boolean).join("/")||"—"}</td><td>{company.active?"Ativa":"Inativa"}</td></tr>)}</tbody></table></div></Page>;
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === "admin";
+  const isConsultant = profile?.role === "consultant";
+  const [items, setItems] = useState<Company[]>([]);
+  const [requests, setRequests] = useState<CompanyRegistrationRequest[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!isAdmin && !isConsultant) return;
+    return onSnapshot(
+      query(collection(db, "companies"), orderBy("legalName")),
+      (snapshot) => setItems(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Company)),
+      () => setMessage("Não foi possível carregar as empresas."),
+    );
+  }, [isAdmin, isConsultant]);
+
+  useEffect(() => {
+    if (!isConsultant || !profile) {
+      setRequests([]);
+      return;
+    }
+    return onSnapshot(
+      query(collection(db, "companyRegistrationRequests"), where("requestedBy", "==", profile.uid)),
+      (snapshot) => setRequests(snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }) as CompanyRegistrationRequest)
+        .sort((a, b) => (b.requestedAt?.toMillis() ?? 0) - (a.requestedAt?.toMillis() ?? 0))),
+      () => setMessage("Não foi possível carregar suas solicitações de cadastro."),
+    );
+  }, [isConsultant, profile]);
+
+  const visibleCompanies = useMemo(
+    () => isAdmin ? items : items.filter((company) => company.active),
+    [isAdmin, items],
+  );
+
+  async function lookup(form: HTMLFormElement) {
+    const cnpj = String(new FormData(form).get("cnpj") || "");
+    if (!cnpj.trim()) return;
+    setLookupLoading(true);
+    setMessage("");
+    try {
+      const company = await lookupCompanyByCnpj(cnpj);
+      const set = (name: string, value: string | undefined | null) => {
+        const input = form.elements.namedItem(name) as HTMLInputElement | null;
+        if (input && value) input.value = value;
+      };
+      set("cnpj", company.cnpj);
+      set("legalName", company.razao_social);
+      set("tradeName", company.nome_fantasia);
+      set("phone", company.ddd_telefone_1);
+      set("email", company.email);
+      set("zipCode", company.cep);
+      set("street", company.logradouro);
+      set("number", company.numero);
+      set("complement", company.complemento);
+      set("neighborhood", company.bairro);
+      set("city", company.municipio);
+      set("state", company.uf);
+      setMessage(`Dados de ${company.razao_social} preenchidos pela BrasilAPI. Revise antes de enviar.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível consultar o CNPJ.");
+    } finally {
+      setLookupLoading(false);
+    }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile) return;
+    const form = event.currentTarget;
+    const input = companyInput(new FormData(form));
+    setSaving(true);
+    setMessage("");
+    try {
+      if (isAdmin) {
+        await saveCompany(input);
+        setMessage("Empresa cadastrada com sucesso.");
+      } else if (isConsultant) {
+        await requestCompanyRegistration(profile, input);
+        setMessage("Solicitação de cadastro enviada para aprovação do administrador.");
+      }
+      form.reset();
+      setShowForm(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível enviar os dados da empresa.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!isAdmin && !isConsultant) {
+    return <Page title="Acesso negado"><p>Área disponível para administradores e consultores.</p></Page>;
+  }
+
+  return (
+    <Page title="Empresas" subtitle={`${visibleCompanies.length} empresa(s) cadastrada(s)`}>
+      <div className="toolbar">
+        <p className="muted">
+          {isAdmin
+            ? "Consulte o CNPJ para preencher os dados automaticamente."
+            : "Visualize as empresas disponíveis ou solicite o cadastro de uma nova empresa."}
+        </p>
+        <button className="primary" type="button" onClick={() => {
+          setShowForm((value) => !value);
+          setMessage("");
+        }}>
+          {showForm ? "Fechar" : isAdmin ? "Nova empresa" : "Solicitar cadastro"}
+        </button>
+      </div>
+
+      {showForm && (
+        <form className="form-grid panel" onSubmit={submit}>
+          <div className="sector-form-heading">
+            <h2>{isAdmin ? "Cadastrar empresa" : "Solicitar cadastro de empresa"}</h2>
+            <p>{isAdmin ? "A empresa ficará disponível imediatamente." : "O administrador revisará os dados antes da inclusão."}</p>
+          </div>
+          <label>CNPJ<input name="cnpj" inputMode="numeric" placeholder="Somente números" onBlur={(event) => lookup(event.currentTarget.form!)} /></label>
+          <div className="actions"><button type="button" disabled={lookupLoading} onClick={(event) => lookup(event.currentTarget.form!)}>{lookupLoading ? "Consultando…" : "Preencher pelo CNPJ"}</button></div>
+          <label>Razão social *<input name="legalName" required /></label>
+          <label>Nome fantasia<input name="tradeName" /></label>
+          <label>Telefone<input name="phone" /></label>
+          <label>E-mail<input name="email" type="email" /></label>
+          <label>Contato<input name="contactName" /></label>
+          <label>CEP<input name="zipCode" /></label>
+          <label>Logradouro<input name="street" /></label>
+          <label>Número<input name="number" /></label>
+          <label>Complemento<input name="complement" /></label>
+          <label>Bairro<input name="neighborhood" /></label>
+          <label>Cidade<input name="city" /></label>
+          <label>UF<input name="state" maxLength={2} /></label>
+          <label className="wide">Observações<textarea name="notes" rows={3} /></label>
+          {message && <p className="notice wide" role="status">{message}</p>}
+          <div className="actions wide"><button className="primary" disabled={saving}>{saving ? "Enviando…" : isAdmin ? "Salvar empresa" : "Enviar solicitação"}</button></div>
+        </form>
+      )}
+
+      {!showForm && message && <p className="notice" role="status">{message}</p>}
+
+      {isConsultant && (
+        <section className="panel">
+          <h2>Minhas solicitações de cadastro</h2>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Empresa</th><th>CNPJ</th><th>Enviada em</th><th>Status</th><th>Retorno</th></tr></thead>
+              <tbody>{requests.map((request) => (
+                <tr key={request.id}>
+                  <td>{request.company.legalName}</td>
+                  <td>{request.company.cnpj || "—"}</td>
+                  <td>{request.requestedAt?.toDate().toLocaleString("pt-BR") || "Agora"}</td>
+                  <td><span className={`badge ${request.status === "approved" ? "active" : request.status === "rejected" ? "inactive" : ""}`}>{requestStatusLabels[request.status]}</span></td>
+                  <td>{request.rejectionReason || (request.status === "approved" ? "Cadastro concluído" : "Aguardando análise")}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {!requests.length && <p className="empty">Nenhuma solicitação de cadastro enviada.</p>}
+          </div>
+        </section>
+      )}
+
+      <section className="panel">
+        <h2>Empresas cadastradas</h2>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Razão social</th><th>Nome fantasia</th><th>CNPJ</th><th>Cidade/UF</th><th>Status</th></tr></thead>
+            <tbody>{visibleCompanies.map((company) => (
+              <tr key={company.id}>
+                <td>{company.legalName}</td>
+                <td>{company.tradeName || "—"}</td>
+                <td>{company.cnpj || "—"}</td>
+                <td>{[company.address?.city, company.address?.state].filter(Boolean).join("/") || "—"}</td>
+                <td><span className={`badge ${company.active ? "active" : "inactive"}`}>{company.active ? "Ativa" : "Inativa"}</span></td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {!visibleCompanies.length && <p className="empty">Nenhuma empresa cadastrada.</p>}
+        </div>
+      </section>
+    </Page>
+  );
 }

@@ -80,6 +80,21 @@ export interface Company {
   address?: { zipCode?: string; street?: string; number?: string; complement?: string; neighborhood?: string; city?: string; state?: string };
 }
 
+export interface CompanyRegistrationRequest {
+  id: string;
+  requestedBy: string;
+  requestedByName: string;
+  requestedByEmail: string;
+  company: Omit<Company, "id" | "legalNameNormalized">;
+  status: "pending" | "approved" | "rejected";
+  requestedAt?: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  companyId?: string | null;
+  rejectionReason?: string | null;
+}
+
 export interface Sector {
   id: string;
   /** Legacy fields kept while company-specific records are consolidated. */

@@ -24,7 +24,7 @@ async function seed() {
       setDoc(doc(db, "companies", "company-b"), { legalName: "Empresa B", active: true }),
       setDoc(doc(db, "users", requesterA.uid), { uid: requesterA.uid, name: "Cliente A", role: "requester", active: true, companyId: "company-a", companyIds: [] }),
       setDoc(doc(db, "users", requesterB.uid), { uid: requesterB.uid, name: "Cliente B", role: "requester", active: true, companyId: "company-b", companyIds: [] }),
-      setDoc(doc(db, "users", consultantA.uid), { uid: consultantA.uid, name: "Consultor A", role: "consultant", active: true, companyId: null, companyIds: ["company-a"], permissions: { takeUnassignedDemand: true, changeStatus: true, addInternalNote: true } }),
+      setDoc(doc(db, "users", consultantA.uid), { uid: consultantA.uid, name: "Consultor A", email: consultantA.email, role: "consultant", active: true, companyId: null, companyIds: ["company-a"], permissions: { takeUnassignedDemand: true, changeStatus: true, addInternalNote: true } }),
       setDoc(doc(db, "users", admin.uid), { uid: admin.uid, name: "Admin", role: "admin", active: true, companyId: null, companyIds: [] }),
       setDoc(doc(db, "demands", "demand-a"), { id: "demand-a", code: "DEM-2026-000001", sequence: 1, year: 2026, title: "A", description: "A", companyId: "company-a", companyName: "Empresa A", requesterId: requesterA.uid, requesterName: "Cliente A", consultantId: null, consultantName: null, status: "analysis", statusId: "analysis", createdAt: new Date() }),
       setDoc(doc(db, "demands", "demand-b"), { id: "demand-b", code: "DEM-2026-000002", sequence: 2, year: 2026, title: "B", description: "B", companyId: "company-b", companyName: "Empresa B", requesterId: requesterB.uid, requesterName: "Cliente B", consultantId: null, consultantName: null, status: "analysis", statusId: "analysis", createdAt: new Date() }),
@@ -70,6 +70,49 @@ describe("Firestore Rules: isolamento e operações privilegiadas", () => {
     await assertFails(updateDoc(requestRef, { status: "approved" }));
     const adminDb = environment.authenticatedContext(admin.uid, { email: admin.email }).firestore();
     await assertSucceeds(updateDoc(doc(adminDb, "consultantCompanyRequests", `${consultantA.uid}_company-b`), { status: "approved" }));
+  });
+
+  it("permite ao consultor solicitar nova empresa e reserva a revisão ao administrador", async () => {
+    const consultantDb = environment.authenticatedContext(consultantA.uid, { email: consultantA.email }).firestore();
+    const requestRef = doc(consultantDb, "companyRegistrationRequests", "registration-a");
+    const company = {
+      legalName: "Empresa Solicitada",
+      tradeName: "Solicitada",
+      cnpj: "19131243000197",
+      phone: "",
+      email: "",
+      contactName: "",
+      notes: "",
+      active: true,
+      address: { zipCode: "", street: "", number: "", complement: "", neighborhood: "", city: "Blumenau", state: "SC" },
+    };
+    await assertSucceeds(setDoc(requestRef, {
+      id: "registration-a",
+      requestedBy: consultantA.uid,
+      requestedByName: "Consultor A",
+      requestedByEmail: consultantA.email,
+      company,
+      status: "pending",
+      requestedAt: new Date(),
+    }));
+    await assertSucceeds(getDoc(requestRef));
+    await assertSucceeds(getDocs(query(collection(consultantDb, "companyRegistrationRequests"), where("requestedBy", "==", consultantA.uid))));
+    await assertFails(updateDoc(requestRef, { status: "approved" }));
+
+    const requesterDb = environment.authenticatedContext(requesterA.uid, { email: requesterA.email }).firestore();
+    await assertFails(getDoc(doc(requesterDb, "companyRegistrationRequests", "registration-a")));
+    await assertFails(setDoc(doc(requesterDb, "companyRegistrationRequests", "registration-b"), {
+      id: "registration-b",
+      requestedBy: requesterA.uid,
+      requestedByName: "Cliente A",
+      requestedByEmail: requesterA.email,
+      company,
+      status: "pending",
+      requestedAt: new Date(),
+    }));
+
+    const adminDb = environment.authenticatedContext(admin.uid, { email: admin.email }).firestore();
+    await assertSucceeds(updateDoc(doc(adminDb, "companyRegistrationRequests", "registration-a"), { status: "approved", companyId: "company-new" }));
   });
 
   it("mantém setores globais e solicitações sem vínculo com empresa", async () => {
