@@ -1,1 +1,6 @@
-const CACHE='sisp-static-v1';const ASSETS=['/SispDemandas/','/SispDemandas/offline.html'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||e.request.url.includes('firestore.googleapis.com'))return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request).then(r=>r||caches.match('/SispDemandas/offline.html))))});self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
+const CACHE="sisp-static-v3";
+const ROOT="/SispDemandas/";
+const ASSETS=[ROOT,`${ROOT}offline.html`,`${ROOT}manifest.webmanifest`,`${ROOT}branding/icon-192.png`,`${ROOT}branding/icon-512.png`];
+self.addEventListener("install",event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)))});
+self.addEventListener("activate",event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
+self.addEventListener("fetch",event=>{if(event.request.method!=="GET"||event.request.url.includes("firestore.googleapis.com")||event.request.url.includes("googleapis.com"))return;event.respondWith(fetch(event.request).then(response=>{if(response.ok&&new URL(event.request.url).origin===self.location.origin){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy))}return response}).catch(()=>caches.match(event.request).then(response=>response||caches.match(`${ROOT}offline.html`))))});

@@ -181,7 +181,8 @@ header small {
   background: var(--surface-alt);
   box-shadow: none;
 }
-.install-wrap{position:relative}.install-app{border:1px solid #2f78c8;background:#174f8e;color:#fff;border-radius:999px;padding:.5rem .8rem;font-weight:700;white-space:nowrap}.install-tip{position:absolute;right:0;top:calc(100% + .5rem);z-index:10;width:250px;padding:.65rem;border-radius:.55rem;background:var(--panel);border:1px solid var(--line);font-size:.78rem;box-shadow:0 8px 22px #0004}
+.install-app{border:1px solid #2f78c8;background:#174f8e;color:#fff;border-radius:999px;padding:.5rem .8rem;font-weight:700;white-space:nowrap}.install-modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:1rem;background:#020817cc}.install-modal{width:min(520px,100%);padding:1.25rem;border:1px solid var(--line);border-radius:1rem;background:var(--panel);box-shadow:0 24px 70px #0008}.install-modal-header{display:flex;gap:.8rem;align-items:center}.install-modal-header img{width:54px;height:54px;border-radius:.8rem;object-fit:contain}.install-modal-header div{flex:1}.install-modal-header h2,.install-modal-header p{margin:.1rem 0}.install-modal-header>button{border:0;background:transparent;font-size:1.7rem}.install-modal li{margin:.6rem 0}.install-modal>.primary{width:100%}
+.install-login{display:flex;justify-content:center;margin-top:1rem}.install-login .install-app{width:100%}
 .online {
   font-size: 13px;
   color: #17864b;

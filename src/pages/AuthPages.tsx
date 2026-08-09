@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { Brand } from "../components/Brand";
+import { InstallAppButton } from "../components/InstallAppButton";
 import { auth } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
 
@@ -67,6 +68,7 @@ export function LoginPage() {
             Novo cadastro
           </Link>
         </div>
+        <div className="install-login"><InstallAppButton /></div>
       </div>
     </section>
   );
