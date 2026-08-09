@@ -235,7 +235,7 @@ export function DemandFormPage() {
           Tela *<input name="screen" required />
         </label>
         <label>
-          Formulário *<input name="form" required />
+          Form *<input name="form" required />
         </label>
         <label>
           Nível *<input name="level" required placeholder="N1" />
