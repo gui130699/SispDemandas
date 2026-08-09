@@ -76,7 +76,7 @@ export function SectorsPage() {
 
       <form className="form-grid panel sector-form" onSubmit={submit}>
         <div className="sector-form-heading">
-          <h2>{isAdmin ? "Cadastrar setor" : "Solicitar novo setor"}</h2>
+          <h2>{isAdmin ? "Cadastrar Setor" : "Solicitar novo setor"}</h2>
           <p>{isAdmin ? "O setor ficará disponível para todos os usuários." : "A solicitação será analisada pelo administrador."}</p>
         </div>
         <label>
@@ -85,7 +85,7 @@ export function SectorsPage() {
         </label>
         <div className="actions">
           <button className="primary" disabled={saving}>
-            {saving ? "Salvando…" : isAdmin ? "Cadastrar setor" : "Solicitar setor"}
+            {saving ? "Salvando…" : isAdmin ? "Cadastrar Setor" : "Solicitar setor"}
           </button>
         </div>
       </form>
