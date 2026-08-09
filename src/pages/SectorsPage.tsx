@@ -98,7 +98,7 @@ export function SectorsPage() {
 
       <form className="form-grid panel sector-form" onSubmit={submit}>
         <div className="sector-form-heading">
-          <h2>{isAdmin ? "Cadastrar Setor" : "Solicitar novo setor"}</h2>
+          <h2 className="notranslate" translate="no">{isAdmin ? "Cadastrar Setor" : "Solicitar novo setor"}</h2>
           <p>{isAdmin ? "O setor ficará disponível para todos os usuários." : "A solicitação será analisada pelo administrador."}</p>
         </div>
         <label>
@@ -106,7 +106,7 @@ export function SectorsPage() {
           <input name="name" value={sectorName} onChange={(event) => setSectorName(event.target.value)} placeholder="Ex.: Financeiro" required minLength={2} />
         </label>
         <div className="actions">
-          <button className="primary" disabled={saving}>
+          <button className="primary notranslate" translate="no" disabled={saving}>
             {saving ? "Salvando…" : isAdmin ? "Cadastrar Setor" : "Solicitar setor"}
           </button>
         </div>
