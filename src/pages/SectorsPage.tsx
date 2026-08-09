@@ -1,5 +1,5 @@
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
 import {
@@ -10,6 +10,7 @@ import {
   uniqueSectors,
 } from "../services/sectors";
 import type { Sector, SectorRequest } from "../types/models";
+import { normalizeText } from "../utils/normalization";
 import { Page } from "./DashboardPage";
 
 export function SectorsPage() {
@@ -19,6 +20,8 @@ export function SectorsPage() {
   const [requests, setRequests] = useState<SectorRequest[]>([]);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [sectorName, setSectorName] = useState("");
+  const pendingSector = useRef("");
   const [rejecting, setRejecting] = useState<SectorRequest | null>(null);
   const [reason, setReason] = useState("");
 
@@ -28,7 +31,16 @@ export function SectorsPage() {
       : query(collection(db, "sectors"), where("active", "==", true));
     return onSnapshot(
       sectorsQuery,
-      (snapshot) => setSectors(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Sector)),
+      (snapshot) => {
+        const nextSectors = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Sector);
+        setSectors(nextSectors);
+        if (pendingSector.current && nextSectors.some((sector) => sector.active && sector.nameNormalized === pendingSector.current)) {
+          setSaving(false);
+          pendingSector.current = "";
+          setSectorName("");
+          setMessage("Setor cadastrado e disponibilizado para todos.");
+        }
+      },
       () => setSectors([]),
     );
   }, [isAdmin]);
@@ -47,12 +59,21 @@ export function SectorsPage() {
 
   const visibleSectors = useMemo(() => uniqueSectors(sectors), [sectors]);
 
+  useEffect(() => {
+    if (!saving) return;
+    const timer = window.setTimeout(() => {
+      setSaving(false);
+      pendingSector.current = "";
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [saving]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!profile) return;
-    const form = event.currentTarget;
-    const name = String(new FormData(form).get("name") || "");
+    const name = sectorName.trim();
     setSaving(true);
+    pendingSector.current = isAdmin ? normalizeText(name) : "";
     setMessage("");
     try {
       if (isAdmin) {
@@ -62,11 +83,12 @@ export function SectorsPage() {
         await requestSector(profile, name);
         setMessage("Solicitação de setor enviada para aprovação.");
       }
-      form.reset();
+      setSectorName("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível salvar o setor.");
     } finally {
       setSaving(false);
+      pendingSector.current = "";
     }
   }
 
@@ -81,7 +103,7 @@ export function SectorsPage() {
         </div>
         <label>
           Nome do setor *
-          <input name="name" placeholder="Ex.: Financeiro" required minLength={2} />
+          <input name="name" value={sectorName} onChange={(event) => setSectorName(event.target.value)} placeholder="Ex.: Financeiro" required minLength={2} />
         </label>
         <div className="actions">
           <button className="primary" disabled={saving}>
