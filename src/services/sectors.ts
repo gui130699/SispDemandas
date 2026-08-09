@@ -1,4 +1,5 @@
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
+import { DEFAULT_SECTOR_NAMES } from "../data/defaultSectors";
 import { db } from "../lib/firebase";
 import type { Sector, SectorRequest, UserProfile } from "../types/models";
 import { normalizeText } from "../utils/normalization";
@@ -24,6 +25,19 @@ export async function createSector(name: string) {
   if (cleanName.length < 2) throw new Error("Informe um nome de setor válido.");
   const id = sectorId(cleanName);
   await setDoc(doc(db, "sectors", id), { id, name: cleanName, nameNormalized: normalizeText(cleanName), active: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function ensureDefaultSectors(existingSectors: Sector[]) {
+  const activeNames = new Set(existingSectors.filter((sector) => sector.active).map((sector) => sector.nameNormalized || normalizeText(sector.name)));
+  const missingNames = DEFAULT_SECTOR_NAMES.filter((name) => !activeNames.has(normalizeText(name)));
+  if (!missingNames.length) return 0;
+  const batch = writeBatch(db);
+  for (const name of missingNames) {
+    const id = sectorId(name);
+    batch.set(doc(db, "sectors", id), { id, name, nameNormalized: normalizeText(name), active: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+  }
+  await batch.commit();
+  return missingNames.length;
 }
 
 export async function requestSector(profile: UserProfile, name: string) {

@@ -5,6 +5,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import {
   approveSectorRequest,
   createSector,
+  ensureDefaultSectors,
   rejectSectorRequest,
   requestSector,
   uniqueSectors,
@@ -22,6 +23,8 @@ export function SectorsPage() {
   const [saving, setSaving] = useState(false);
   const [sectorName, setSectorName] = useState("");
   const pendingSector = useRef("");
+  const defaultCatalogStarted = useRef(false);
+  const [sectorsLoaded, setSectorsLoaded] = useState(false);
   const [rejecting, setRejecting] = useState<SectorRequest | null>(null);
   const [reason, setReason] = useState("");
 
@@ -34,6 +37,7 @@ export function SectorsPage() {
       (snapshot) => {
         const nextSectors = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Sector);
         setSectors(nextSectors);
+        setSectorsLoaded(true);
         if (pendingSector.current && nextSectors.some((sector) => sector.active && sector.nameNormalized === pendingSector.current)) {
           setSaving(false);
           pendingSector.current = "";
@@ -41,7 +45,7 @@ export function SectorsPage() {
           setMessage("Setor cadastrado e disponibilizado para todos.");
         }
       },
-      () => setSectors([]),
+      () => { setSectors([]); setSectorsLoaded(true); },
     );
   }, [isAdmin]);
 
@@ -58,6 +62,16 @@ export function SectorsPage() {
   }, [isAdmin]);
 
   const visibleSectors = useMemo(() => uniqueSectors(sectors), [sectors]);
+
+  useEffect(() => {
+    if (!isAdmin || !sectorsLoaded || defaultCatalogStarted.current) return;
+    defaultCatalogStarted.current = true;
+    void ensureDefaultSectors(sectors)
+      .then((created) => {
+        if (created) setMessage(`${created} setor(es) padrão adicionado(s) ao catálogo.`);
+      })
+      .catch(() => setMessage("Não foi possível completar o catálogo padrão de setores."));
+  }, [isAdmin, sectors, sectorsLoaded]);
 
   useEffect(() => {
     if (!saving) return;
