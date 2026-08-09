@@ -180,7 +180,11 @@ service cloud.firestore {
       // Spark-plan mode: direct writes remain limited to the owning company
       // or an authorized consultant. Server-side privileged workflows are not
       // enabled until Cloud Functions can be deployed.
-      allow create: if active() && ((requester() && request.resource.data.companyId == profile().companyId) || consultantCompany(request.resource.data.companyId));
+      allow create: if active()
+        && ((requester() && request.resource.data.companyId == profile().companyId) || consultantCompany(request.resource.data.companyId))
+        && exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId))
+        && get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.active == true
+        && request.resource.data.companyName == get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.legalName;
       allow update: if immutableDemandFields() && (admin() || (consultantCompany(resource.data.companyId) && (resource.data.consultantId == request.auth.uid || resource.data.consultantId == null)));
       allow delete: if false;
 

@@ -20,6 +20,7 @@ import {
 } from "../services/demands";
 import { resolveStatus } from "../services/statuses";
 import type {
+  Company,
   Demand,
   DemandHistoryEvent,
   DemandStatus,
@@ -145,6 +146,8 @@ export function DemandFormPage() {
   const go = useNavigate();
   const [statuses, setStatuses] = useState<DemandStatus[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [error, setError] = useState("");
   useEffect(
     () =>
@@ -161,6 +164,26 @@ export function DemandFormPage() {
     () => onSnapshot(query(collection(db, "sectors"), where("active", "==", true)), (snapshot) => setSectors(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Sector))),
     [],
   );
+  useEffect(() => {
+    if (profile?.role === "requester" && profile.companyId) {
+      setSelectedCompanyId(profile.companyId);
+      return onSnapshot(
+        doc(db, "companies", profile.companyId),
+        (snapshot) => setCompanies(snapshot.exists() ? [{ id: snapshot.id, ...snapshot.data() } as Company] : []),
+        () => setError("Não foi possível carregar a empresa vinculada."),
+      );
+    }
+    if (profile?.role === "consultant") {
+      setSelectedCompanyId("");
+      return onSnapshot(
+        query(collection(db, "companies"), where("active", "==", true)),
+        (snapshot) => setCompanies(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Company)),
+        () => setError("Não foi possível carregar as empresas vinculadas."),
+      );
+    }
+    setCompanies([]);
+    setSelectedCompanyId("");
+  }, [profile]);
   if (profile?.role === "admin") {
     return (
       <Page title="Acesso restrito">
@@ -169,6 +192,11 @@ export function DemandFormPage() {
     );
   }
   const availableSectors = uniqueSectors(sectors);
+  const linkedCompanies = profile?.role === "consultant"
+    ? companies
+        .filter((company) => profile.companyIds?.includes(company.id))
+        .sort((a, b) => a.legalName.localeCompare(b.legalName, "pt-BR"))
+    : companies;
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!profile) return;
@@ -182,6 +210,12 @@ export function DemandFormPage() {
       );
       return;
     }
+    const companyId = profile.role === "requester" ? profile.companyId ?? "" : selectedCompanyId;
+    const company = linkedCompanies.find((item) => item.id === companyId);
+    if (!companyId || !company) {
+      setError(profile.role === "consultant" ? "Selecione uma empresa vinculada." : "Não foi possível carregar sua empresa.");
+      return;
+    }
     try {
       const id = await createDemand(
         {
@@ -192,7 +226,8 @@ export function DemandFormPage() {
           levelId: String(f.get("level")),
           levelName: String(f.get("level")),
           priority: String(f.get("priority")) as Priority,
-          companyId: profile.companyId || String(f.get("companyId")),
+          companyId,
+          companyName: company.legalName,
           requesterSector: String(f.get("sector") || ""),
         },
         profile,
@@ -217,13 +252,20 @@ export function DemandFormPage() {
             <option value="urgent">Urgente</option>
           </select>
         </label>
-        {profile?.role !== "requester" && (
-          <>
-            <label>
-              Empresa (ID) *<input name="companyId" required />
-            </label>
-          </>
-        )}
+        <label>
+          Empresa *
+          <select
+            name="companyId"
+            value={profile?.role === "requester" ? profile.companyId ?? "" : selectedCompanyId}
+            onChange={(event) => setSelectedCompanyId(event.target.value)}
+            disabled={profile?.role === "requester" || !linkedCompanies.length}
+            required
+          >
+            {profile?.role === "consultant" && <option value="">{linkedCompanies.length ? "Selecione uma empresa" : "Nenhuma empresa vinculada"}</option>}
+            {profile?.role === "requester" && !linkedCompanies.length && <option value={profile.companyId ?? ""}>{profile.companyName || "Carregando empresa…"}</option>}
+            {linkedCompanies.map((company) => <option key={company.id} value={company.id}>{company.legalName}</option>)}
+          </select>
+        </label>
         <label>
           Setor solicitante
           <select name="sector" defaultValue="">

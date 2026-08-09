@@ -53,13 +53,16 @@ describe("Firestore Rules: isolamento e operações privilegiadas", () => {
     await assertFails(updateDoc(doc(db, "demands", "demand-a"), { consultantId: consultantA.uid }));
     await assertFails(updateDoc(doc(db, "demands", "demand-a"), { status: "completed" }));
     await assertFails(updateDoc(doc(db, "demands", "demand-a"), { code: "DEM-2026-999999" }));
-    await assertSucceeds(setDoc(doc(db, "demands", "new-demand"), { companyId: "company-a" }));
+    await assertSucceeds(setDoc(doc(db, "demands", "new-demand"), { companyId: "company-a", companyName: "Empresa A" }));
+    await assertFails(setDoc(doc(db, "demands", "forged-company-name"), { companyId: "company-a", companyName: "Empresa Forjada" }));
   });
 
   it("não permite auto-vínculo de consultor e mantém leitura multiempresa isolada", async () => {
     const db = environment.authenticatedContext(consultantA.uid, { email: consultantA.email }).firestore();
     await assertSucceeds(getDoc(doc(db, "demands", "demand-a")));
     await assertFails(getDoc(doc(db, "demands", "demand-b")));
+    await assertSucceeds(setDoc(doc(db, "demands", "consultant-demand-a"), { companyId: "company-a", companyName: "Empresa A" }));
+    await assertFails(setDoc(doc(db, "demands", "consultant-demand-b"), { companyId: "company-b", companyName: "Empresa B" }));
     await assertFails(updateDoc(doc(db, "users", consultantA.uid), { companyIds: ["company-a", "company-b"] }));
   });
 
