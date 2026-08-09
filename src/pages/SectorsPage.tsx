@@ -29,7 +29,7 @@ export function SectorsPage() {
     return onSnapshot(
       sectorsQuery,
       (snapshot) => setSectors(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Sector)),
-      () => setMessage("Não foi possível carregar os setores."),
+      () => setSectors([]),
     );
   }, [isAdmin]);
 
@@ -41,7 +41,7 @@ export function SectorsPage() {
     return onSnapshot(
       query(collection(db, "sectorRequests"), where("status", "==", "pending")),
       (snapshot) => setRequests(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as SectorRequest)),
-      () => setMessage("Não foi possível carregar as solicitações."),
+      () => setRequests([]),
     );
   }, [isAdmin]);
 
