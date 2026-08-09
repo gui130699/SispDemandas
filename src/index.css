@@ -676,6 +676,25 @@ th {
   font-weight: 600;
   font-size: 14px;
 }
+.sector-form {
+  align-items: end;
+}
+.sector-form-heading {
+  grid-column: 1 / -1;
+}
+.sector-form-heading h2 {
+  margin-bottom: 4px;
+}
+.sector-form-heading p {
+  margin: 0;
+  color: var(--muted);
+}
+.sector-form .actions {
+  margin: 0;
+}
+.sector-form .actions button {
+  min-width: 170px;
+}
 .wide {
   grid-column: 1/-1;
 }

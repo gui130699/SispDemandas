@@ -26,6 +26,7 @@ import type {
   Priority,
   Sector,
 } from "../types/models";
+import { uniqueSectors } from "../services/sectors";
 import { elapsedDays } from "../utils/dates";
 import { Page } from "./DashboardPage";
 const statusStyle = (color?: string) => ({
@@ -167,7 +168,7 @@ export function DemandFormPage() {
       </Page>
     );
   }
-  const availableSectors = sectors.filter((sector) => profile?.role !== "requester" || sector.companyId === profile.companyId);
+  const availableSectors = uniqueSectors(sectors);
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!profile) return;
@@ -227,7 +228,7 @@ export function DemandFormPage() {
           Setor solicitante
           <select name="sector" defaultValue="">
             <option value="">Selecione um setor</option>
-            {availableSectors.map((sector) => <option key={sector.id} value={sector.name}>{profile?.role === "consultant" ? `${sector.name} — ${sector.companyName}` : sector.name}</option>)}
+            {availableSectors.map((sector) => <option key={sector.nameNormalized || sector.id} value={sector.name}>{sector.name}</option>)}
           </select>
         </label>
         <label>

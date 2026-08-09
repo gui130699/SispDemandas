@@ -5,7 +5,6 @@ import { db } from "../lib/firebase";
 import { useAuth } from "../features/auth/AuthContext";
 import type { Company, Demand } from "../types/models";
 import { requestConsultantCompanyAccess } from "../services/users";
-import { requestSector } from "../services/sectors";
 import { elapsedDays } from "../utils/dates";
 
 export function DashboardPage() {
@@ -16,8 +15,6 @@ export function DashboardPage() {
   const [companyToLink, setCompanyToLink] = useState("");
   const [linkingCompany, setLinkingCompany] = useState(false);
   const [linkError, setLinkError] = useState("");
-  const [sectorName, setSectorName] = useState("");
-  const [sectorMessage, setSectorMessage] = useState("");
 
   useEffect(() => {
     if (profile?.role === "requester" && profile.companyId) {
@@ -174,21 +171,6 @@ export function DashboardPage() {
         )}
       </div>
       {linkError && <p className="error">{linkError}</p>}
-      {profile?.role !== "admin" && (
-        <form className="toolbar" onSubmit={async (event) => {
-          event.preventDefault();
-          const actor = profile;
-          if (!actor) return;
-          const company = actor.role === "requester" ? companies[0] : companies.find((item) => item.id === selectedCompanyId);
-          if (!company) { setSectorMessage("Selecione uma empresa para solicitar o setor."); return; }
-          try { await requestSector(actor, company, sectorName); setSectorName(""); setSectorMessage("Solicitação de setor enviada para aprovação."); }
-          catch (error) { setSectorMessage(error instanceof Error ? error.message : "Não foi possível solicitar o setor."); }
-        }}>
-          <label>Solicitar novo setor<input value={sectorName} onChange={(event) => setSectorName(event.target.value)} placeholder="Nome do setor" required minLength={2}/></label>
-          <button className="primary" type="submit" disabled={!sectorName.trim()}>Solicitar setor</button>
-        </form>
-      )}
-      {sectorMessage && <p className="notice" role="status">{sectorMessage}</p>}
       <div className="cards">
         {cards.map(([label, value]) => (
           <Link

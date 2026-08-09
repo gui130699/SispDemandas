@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 
 const rules = readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8");
 let environment: RulesTestEnvironment;
@@ -28,6 +28,8 @@ async function seed() {
       setDoc(doc(db, "users", admin.uid), { uid: admin.uid, name: "Admin", role: "admin", active: true, companyId: null, companyIds: [] }),
       setDoc(doc(db, "demands", "demand-a"), { id: "demand-a", code: "DEM-2026-000001", sequence: 1, year: 2026, title: "A", description: "A", companyId: "company-a", companyName: "Empresa A", requesterId: requesterA.uid, requesterName: "Cliente A", consultantId: null, consultantName: null, status: "analysis", statusId: "analysis", createdAt: new Date() }),
       setDoc(doc(db, "demands", "demand-b"), { id: "demand-b", code: "DEM-2026-000002", sequence: 2, year: 2026, title: "B", description: "B", companyId: "company-b", companyName: "Empresa B", requesterId: requesterB.uid, requesterName: "Cliente B", consultantId: null, consultantName: null, status: "analysis", statusId: "analysis", createdAt: new Date() }),
+      setDoc(doc(db, "sectors", "financeiro"), { id: "financeiro", name: "Financeiro", nameNormalized: "financeiro", active: true }),
+      setDoc(doc(db, "sectors", "inativo"), { id: "inativo", name: "Inativo", nameNormalized: "inativo", active: false }),
     ]);
   });
 }
@@ -68,6 +70,22 @@ describe("Firestore Rules: isolamento e operações privilegiadas", () => {
     await assertFails(updateDoc(requestRef, { status: "approved" }));
     const adminDb = environment.authenticatedContext(admin.uid, { email: admin.email }).firestore();
     await assertSucceeds(updateDoc(doc(adminDb, "consultantCompanyRequests", `${consultantA.uid}_company-b`), { status: "approved" }));
+  });
+
+  it("mantém setores globais e solicitações sem vínculo com empresa", async () => {
+    const requesterDb = environment.authenticatedContext(requesterA.uid, { email: requesterA.email }).firestore();
+    const consultantDb = environment.authenticatedContext(consultantA.uid, { email: consultantA.email }).firestore();
+    await assertSucceeds(getDoc(doc(requesterDb, "sectors", "financeiro")));
+    await assertSucceeds(getDoc(doc(consultantDb, "sectors", "financeiro")));
+    await assertFails(getDoc(doc(requesterDb, "sectors", "inativo")));
+
+    const requestRef = doc(requesterDb, "sectorRequests", "request-sector");
+    await assertSucceeds(setDoc(requestRef, { id: "request-sector", name: "Comercial", nameNormalized: "comercial", requestedBy: requesterA.uid, requestedByName: "Cliente A", requestedByRole: "requester", status: "pending", requestedAt: new Date() }));
+    await assertFails(updateDoc(requestRef, { status: "approved" }));
+    await assertSucceeds(getDocs(query(collection(requesterDb, "sectorRequests"), where("requestedBy", "==", requesterA.uid))));
+
+    const invalidRef = doc(requesterDb, "sectorRequests", "company-sector");
+    await assertFails(setDoc(invalidRef, { id: "company-sector", companyId: "company-a", companyName: "Empresa A", name: "Fiscal", nameNormalized: "fiscal", requestedBy: requesterA.uid, requestedByName: "Cliente A", requestedByRole: "requester", status: "pending", requestedAt: new Date() }));
   });
 
   it("protege counters, auditLogs e notas de escrita web direta", async () => {

@@ -82,8 +82,9 @@ export interface Company {
 
 export interface Sector {
   id: string;
-  companyId: string;
-  companyName: string;
+  /** Legacy fields kept while company-specific records are consolidated. */
+  companyId?: string;
+  companyName?: string;
   name: string;
   nameNormalized: string;
   active: boolean;
@@ -93,8 +94,9 @@ export interface Sector {
 
 export interface SectorRequest {
   id: string;
-  companyId: string;
-  companyName: string;
+  /** Legacy fields kept for requests created before the global catalog. */
+  companyId?: string;
+  companyName?: string;
   name: string;
   nameNormalized: string;
   requestedBy: string;
