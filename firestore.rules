@@ -101,13 +101,13 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /uniqueCompanyKeys/{id} { allow read, write: if admin(); }
+    match /appConfig/{id} { allow read, write: if admin(); }
     match /levels/{id} { allow read: if active(); allow write: if admin(); }
     match /sectors/{id} {
       // Setores formam um catálogo global. Registros ativos também são
       // públicos para preencher o cadastro inicial antes da autenticação.
       allow read: if admin() || resource.data.active == true;
-      allow create, update: if admin();
-      allow delete: if false;
+      allow create, update, delete: if admin();
     }
     match /sectorRequests/{id} {
       allow get: if active() && (admin() || resource.data.requestedBy == request.auth.uid);

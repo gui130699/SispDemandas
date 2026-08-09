@@ -5,6 +5,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import {
   approveSectorRequest,
   createSector,
+  deleteSector,
   ensureDefaultSectors,
   rejectSectorRequest,
   requestSector,
@@ -26,6 +27,8 @@ export function SectorsPage() {
   const defaultCatalogStarted = useRef(false);
   const [sectorsLoaded, setSectorsLoaded] = useState(false);
   const [rejecting, setRejecting] = useState<SectorRequest | null>(null);
+  const [deleting, setDeleting] = useState<Sector | null>(null);
+  const [deletingSector, setDeletingSector] = useState(false);
   const [reason, setReason] = useState("");
 
   useEffect(() => {
@@ -164,12 +167,13 @@ export function SectorsPage() {
         <h2>Setores cadastrados</h2>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Setor</th>{isAdmin && <th>Status</th>}</tr></thead>
+            <thead><tr><th>Setor</th>{isAdmin && <><th>Status</th><th>Ações</th></>}</tr></thead>
             <tbody>
               {visibleSectors.map((sector) => (
                 <tr key={sector.nameNormalized || sector.id}>
                   <td>{sector.name}</td>
                   {isAdmin && <td><span className={`badge ${sector.active ? "active" : "inactive"}`}>{sector.active ? "Ativo" : "Inativo"}</span></td>}
+                  {isAdmin && <td><button className="danger" type="button" onClick={() => setDeleting(sector)}>Excluir</button></td>}
                 </tr>
               ))}
             </tbody>
@@ -177,6 +181,34 @@ export function SectorsPage() {
           {!visibleSectors.length && <p className="empty">Nenhum setor cadastrado.</p>}
         </div>
       </section>
+
+      {deleting && (
+        <div className="demand-description-modal-backdrop" onMouseDown={() => !deletingSector && setDeleting(null)}>
+          <section className="demand-description-modal" role="dialog" aria-modal="true" aria-labelledby="delete-sector-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="demand-description-modal-header">
+              <h2 id="delete-sector-title">Excluir setor</h2>
+              <button className="demand-description-close" type="button" aria-label="Fechar" disabled={deletingSector} onClick={() => setDeleting(null)}>×</button>
+            </div>
+            <p>Deseja excluir o setor <strong>{deleting.name}</strong> do catálogo?</p>
+            <p className="muted">Demandas antigas manterão o nome registrado, mas o setor deixará de aparecer nas novas seleções.</p>
+            <div className="actions">
+              <button className="danger" type="button" disabled={deletingSector} onClick={async () => {
+                setDeletingSector(true);
+                try {
+                  await deleteSector(deleting.name);
+                  setMessage(`Setor ${deleting.name} excluído com sucesso.`);
+                  setDeleting(null);
+                } catch (error) {
+                  setMessage(error instanceof Error ? error.message : "Não foi possível excluir o setor.");
+                } finally {
+                  setDeletingSector(false);
+                }
+              }}>{deletingSector ? "Excluindo…" : "Excluir setor"}</button>
+              <button type="button" disabled={deletingSector} onClick={() => setDeleting(null)}>Cancelar</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {rejecting && (
         <div className="demand-description-modal-backdrop" onMouseDown={() => setRejecting(null)}>

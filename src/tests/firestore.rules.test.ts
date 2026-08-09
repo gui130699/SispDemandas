@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 
 const rules = readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8");
 let environment: RulesTestEnvironment;
@@ -86,6 +86,12 @@ describe("Firestore Rules: isolamento e operações privilegiadas", () => {
 
     const invalidRef = doc(requesterDb, "sectorRequests", "company-sector");
     await assertFails(setDoc(invalidRef, { id: "company-sector", companyId: "company-a", companyName: "Empresa A", name: "Fiscal", nameNormalized: "fiscal", requestedBy: requesterA.uid, requestedByName: "Cliente A", requestedByRole: "requester", status: "pending", requestedAt: new Date() }));
+
+    await assertFails(deleteDoc(doc(requesterDb, "sectors", "financeiro")));
+    const adminDb = environment.authenticatedContext(admin.uid, { email: admin.email }).firestore();
+    await assertSucceeds(deleteDoc(doc(adminDb, "sectors", "financeiro")));
+    await assertSucceeds(setDoc(doc(adminDb, "appConfig", "defaultSectorCatalog"), { initialized: true }));
+    await assertFails(getDoc(doc(requesterDb, "appConfig", "defaultSectorCatalog")));
   });
 
   it("protege counters, auditLogs e notas de escrita web direta", async () => {

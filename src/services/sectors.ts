@@ -28,16 +28,28 @@ export async function createSector(name: string) {
 }
 
 export async function ensureDefaultSectors(existingSectors: Sector[]) {
+  const catalogRef = doc(db, "appConfig", "defaultSectorCatalog");
+  const catalog = await getDoc(catalogRef);
+  if (catalog.data()?.initialized === true) return 0;
   const activeNames = new Set(existingSectors.filter((sector) => sector.active).map((sector) => sector.nameNormalized || normalizeText(sector.name)));
   const missingNames = DEFAULT_SECTOR_NAMES.filter((name) => !activeNames.has(normalizeText(name)));
-  if (!missingNames.length) return 0;
   const batch = writeBatch(db);
   for (const name of missingNames) {
     const id = sectorId(name);
     batch.set(doc(db, "sectors", id), { id, name, nameNormalized: normalizeText(name), active: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
   }
+  batch.set(catalogRef, { initialized: true, sectorCount: DEFAULT_SECTOR_NAMES.length, initializedAt: serverTimestamp() }, { merge: true });
   await batch.commit();
   return missingNames.length;
+}
+
+export async function deleteSector(name: string) {
+  const matches = await getDocs(query(collection(db, "sectors"), where("nameNormalized", "==", normalizeText(name))));
+  if (matches.empty) return 0;
+  const batch = writeBatch(db);
+  matches.docs.forEach((item) => batch.delete(item.ref));
+  await batch.commit();
+  return matches.size;
 }
 
 export async function requestSector(profile: UserProfile, name: string) {
