@@ -142,7 +142,7 @@ export function SectorsPage() {
                     <td>{request.requestedByName}</td>
                     <td>
                       <div className="row-actions">
-                        <button className="primary" type="button" onClick={async () => {
+                        <button className="primary notranslate" translate="no" type="button" onClick={async () => {
                           if (!profile) return;
                           try {
                             await approveSectorRequest(request, profile);
