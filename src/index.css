@@ -12,6 +12,7 @@
   --blue: #123c73;
   --dark: #07162d;
   --danger: #b42318;
+  --brand-text-gradient: linear-gradient(90deg, #123c73 0%, #69266f 55%, #b31659 100%);
 }
 html[data-theme="dark"] {
   --bg: #080d16;
@@ -22,6 +23,7 @@ html[data-theme="dark"] {
   --border: #253347;
   --surface-alt: #182338;
   --blue: #4285d4;
+  --brand-text-gradient: linear-gradient(90deg, #79bdff 0%, #bd8be8 52%, #ff659f 100%);
 }
 * {
   box-sizing: border-box;
@@ -104,8 +106,11 @@ a {
   display: none;
   width: 42px;
   height: 42px;
-  object-fit: contain;
+  object-fit: cover;
   flex: 0 0 auto;
+  border: 1px solid #cf8edc66;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px #0208174d, inset 0 1px 0 #ffffff38;
 }
 .brand-image.loaded {
   display: block;
@@ -115,6 +120,14 @@ a {
   font-weight: 750;
   white-space: nowrap;
   line-height: 1;
+  background: var(--brand-text-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.sidebar .brand-name {
+  background-image: linear-gradient(90deg, #82c5ff 0%, #d2a6ef 50%, #ff6aa5 100%);
 }
 .brand-fallback {
   width: 42px;
@@ -948,6 +961,7 @@ dd {
 .logo .brand-image {
   width: 60px;
   height: 60px;
+  border-radius: 18px;
 }
 .logo .brand-fallback {
   width: 60px;
